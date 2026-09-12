@@ -146,7 +146,8 @@ export function Alert({
     <div
       role={tone === "error" ? "alert" : "status"}
       className={classNames(
-        "rounded-lg border px-3 py-2 text-sm",
+        // Errors can quote a long URL; wrap it rather than blow out the layout.
+        "overflow-hidden rounded-lg border px-3 py-2 text-sm break-words",
         tone === "error" && "border-live-500/40 bg-live-500/10 text-live-500",
         tone === "info" && "border-brand-500/40 bg-brand-500/10 text-brand-400",
         tone === "success" &&

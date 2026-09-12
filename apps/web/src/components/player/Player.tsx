@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { Button, Spinner } from "@/components/ui";
+import { errorMessage } from "@/lib/api";
 import { formatBitrate } from "@/lib/format";
 
 import { connectWhep, whepRoundTripMs, type WhepConnection } from "./whep";
@@ -235,9 +236,7 @@ export function Player({
         if (autoPlay) void video.play().catch(() => undefined);
       } catch (cause) {
         if (controller.signal.aborted) return;
-        setError(
-          cause instanceof Error ? cause.message : "Low-latency mode failed",
-        );
+        setError(errorMessage(cause, "Low-latency mode failed"));
         setMode("hls");
       }
     })();

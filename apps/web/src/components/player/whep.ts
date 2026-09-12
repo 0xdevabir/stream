@@ -63,7 +63,9 @@ export async function connectWhep(
   await pc.setLocalDescription(offer);
   await waitForIceGathering(pc);
 
-  const endpoint = withToken(options.url, options.token);
+  // Absolute, because it is also the base for resolving the session URL below
+  // and `new URL(relative, relativeBase)` throws.
+  const endpoint = absoluteUrl(withToken(options.url, options.token));
 
   let response: Response;
   try {
@@ -88,13 +90,20 @@ export async function connectWhep(
     );
   }
 
-  const answer = await response.text();
-  await pc.setRemoteDescription({ type: "answer", sdp: answer });
+  // The answer has been accepted by now, so a later throw would leave a live
+  // PeerConnection nobody owns.
+  let sessionUrl: string | null;
+  try {
+    await pc.setRemoteDescription({ type: "answer", sdp: await response.text() });
 
-  // The session resource we must DELETE on teardown. Without it MediaMTX
-  // holds the PeerConnection open until its own timeout fires.
-  const location = response.headers.get("Location");
-  const sessionUrl = location ? new URL(location, endpoint).toString() : null;
+    // The session resource we must DELETE on teardown. Without it MediaMTX
+    // holds the PeerConnection open until its own timeout fires.
+    const location = response.headers.get("Location");
+    sessionUrl = location ? new URL(location, endpoint).toString() : null;
+  } catch (cause) {
+    pc.close();
+    throw cause;
+  }
 
   return {
     pc,
@@ -115,6 +124,16 @@ function withToken(url: string, token: string | null): string {
   if (!token) return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Media paths are same-origin relative (`/webrtc/...`). Resolving them against
+ * the page up front matters because the endpoint doubles as the base URL for
+ * the session resource MediaMTX returns in `Location`, and `new URL` rejects a
+ * relative base.
+ */
+function absoluteUrl(path: string): string {
+  return new URL(path, window.location.href).toString();
 }
 
 function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {

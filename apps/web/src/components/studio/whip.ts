@@ -61,15 +61,22 @@ export async function publishWhip(
   await pc.setLocalDescription(offer);
   await waitForIceGathering(pc);
 
-  const separator = options.url.includes("?") ? "&" : "?";
-  const endpoint = `${options.url}${separator}token=${encodeURIComponent(options.token)}`;
+  // Absolute, because it is also the base for resolving the session URL below
+  // and `new URL(relative, relativeBase)` throws.
+  const endpoint = absoluteUrl(withToken(options.url, options.token));
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/sdp" },
-    body: pc.localDescription?.sdp ?? offer.sdp ?? "",
-    credentials: "same-origin",
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: pc.localDescription?.sdp ?? offer.sdp ?? "",
+      credentials: "same-origin",
+    });
+  } catch (cause) {
+    pc.close();
+    throw cause;
+  }
 
   if (!response.ok) {
     pc.close();
@@ -80,10 +87,19 @@ export async function publishWhip(
     );
   }
 
-  await pc.setRemoteDescription({ type: "answer", sdp: await response.text() });
+  // From here the offer has been accepted, so media may already be flowing.
+  // Anything that throws now must tear the connection down, or the browser
+  // keeps publishing a class the UI believes never started.
+  let sessionUrl: string | null;
+  try {
+    await pc.setRemoteDescription({ type: "answer", sdp: await response.text() });
 
-  const location = response.headers.get("Location");
-  const sessionUrl = location ? new URL(location, endpoint).toString() : null;
+    const location = response.headers.get("Location");
+    sessionUrl = location ? new URL(location, endpoint).toString() : null;
+  } catch (cause) {
+    pc.close();
+    throw cause;
+  }
 
   let lastBytes = 0;
   let lastAt = 0;
@@ -121,6 +137,21 @@ export async function publishWhip(
       }
     },
   };
+}
+
+function withToken(url: string, token: string): string {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Media paths are same-origin relative (`/webrtc/...`). Resolving them against
+ * the page up front matters because the endpoint doubles as the base URL for
+ * the session resource MediaMTX returns in `Location`, and `new URL` rejects a
+ * relative base.
+ */
+function absoluteUrl(path: string): string {
+  return new URL(path, window.location.href).toString();
 }
 
 function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {

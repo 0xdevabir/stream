@@ -148,7 +148,19 @@ export const api = {
 
 /** Turns an unknown thrown value into something safe to render. */
 export function errorMessage(error: unknown, fallback = "Something went wrong"): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error && error.message) return error.message;
+  if (error instanceof ApiError) return redactSecrets(error.message);
+  if (error instanceof Error && error.message) return redactSecrets(error.message);
   return fallback;
+}
+
+/**
+ * Browser errors quote the URL that failed, and WHIP/WHEP carry their grant in
+ * the query string — so an unlucky exception can paint a live publish token
+ * across the screen of someone who is, by definition, mid-broadcast. Anyone
+ * reading it could hijack the ingest.
+ */
+export function redactSecrets(message: string): string {
+  return message
+    .replace(/([?&](?:token|key|jwt|password)=)[^&\s"']+/gi, "$1[redacted]")
+    .replace(/\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[redacted token]");
 }
