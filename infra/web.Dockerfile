@@ -43,4 +43,6 @@ COPY --from=build /app/apps/web ./apps/web
 USER node
 EXPOSE 3000
 WORKDIR /app/apps/web
-CMD ["../../node_modules/.bin/next", "start", "--port", "3000", "--hostname", "0.0.0.0"]
+# pnpm links a workspace package's binaries into that package's own
+# node_modules/.bin, not the root one.
+CMD ["node_modules/.bin/next", "start", "--port", "3000", "--hostname", "0.0.0.0"]

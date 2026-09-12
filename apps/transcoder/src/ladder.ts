@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import type { Rendition } from "@stream/shared";
 
 /**
@@ -271,13 +273,46 @@ export function buildFfmpegArgs(options: LadderOptions): string[] {
  * The `hls_key_info_file` ffmpeg reads at startup:
  *   line 1  the key URI written verbatim into every playlist
  *   line 2  where ffmpeg reads the actual 16 key bytes from
+ *   line 3  the AES-128 IV, as 32 hex digits
  *
- * A third line would pin the IV. It is deliberately omitted so ffmpeg derives
- * each segment's IV from its media sequence number: a constant IV would make
- * identical plaintext prefixes (MPEG-TS headers are highly repetitive) encrypt
- * to identical ciphertext across segments. The VOD playlist therefore has to
- * preserve absolute sequence numbers -- see `vod-recorder.ts`.
+ * The third line is not optional in practice. RFC 8216 says an absent IV
+ * attribute means "use the media sequence number", which would give every
+ * segment a distinct IV -- but ffmpeg's hlsenc does not implement that. Given
+ * no IV it snapshots the sequence number *once*, at encoder start, and reuses
+ * the result for the whole run; since encoding starts at sequence 0, every
+ * segment of every rendition ends up encrypted under an all-zero IV. That was
+ * verified against real output, not inferred from the docs.
+ *
+ * So we pin an IV explicitly and make it unpredictable per stream. See
+ * `deriveIv`.
  */
-export function buildKeyInfo(keyUri: string, keyFilePath: string): string {
-  return `${keyUri}\n${keyFilePath}\n`;
+export function buildKeyInfo(
+  keyUri: string,
+  keyFilePath: string,
+  ivHex: string,
+): string {
+  if (!/^[0-9a-f]{32}$/i.test(ivHex)) {
+    throw new Error(`IV must be 32 hex digits, got ${JSON.stringify(ivHex)}`);
+  }
+  return `${keyUri}\n${keyFilePath}\n${ivHex.toLowerCase()}\n`;
+}
+
+/**
+ * A stream's AES-128 IV, derived from its content key.
+ *
+ * Deterministic on purpose: if the transcoder restarts mid-class it must
+ * produce the same IV, or the segments written before the restart would no
+ * longer decrypt under the playlist's single EXT-X-KEY line and the recording
+ * would be corrupt from that point on. Deriving beats storing -- there is no
+ * extra column to migrate and no way for the two to drift apart.
+ *
+ * An IV is not a secret (it is published in the playlist); it only has to be
+ * unpredictable and not reused across keys, and an HMAC under the content key
+ * gives both.
+ */
+export function deriveIv(contentKeyHex: string, streamId: string): string {
+  return createHmac("sha256", Buffer.from(contentKeyHex, "hex"))
+    .update(`hls-iv:${streamId}`)
+    .digest("hex")
+    .slice(0, 32);
 }

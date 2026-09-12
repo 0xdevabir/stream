@@ -10,6 +10,7 @@ import {
   buildFfmpegArgs,
   buildKeyInfo,
   buildMasterPlaylist,
+  deriveIv,
   selectRenditions,
 } from "./ladder";
 
@@ -216,16 +217,51 @@ describe("buildFfmpegArgs", () => {
 });
 
 describe("buildKeyInfo", () => {
-  it("pairs the public key URI with the local key file", () => {
+  const IV = "00112233445566778899aabbccddeeff";
+
+  it("pairs the public key URI with the local key file and an IV", () => {
     assert.equal(
-      buildKeyInfo("/v1/keys/k_abc", "/media/keys/abc.key"),
-      "/v1/keys/k_abc\n/media/keys/abc.key\n",
+      buildKeyInfo("/v1/keys/k_abc", "/media/keys/abc.key", IV),
+      `/v1/keys/k_abc\n/media/keys/abc.key\n${IV}\n`,
     );
   });
 
-  it("omits the IV line so ffmpeg derives it from the sequence number", () => {
-    // A pinned IV would encrypt identical MPEG-TS headers to identical
-    // ciphertext in every segment.
-    assert.equal(buildKeyInfo("/v1/keys/k", "/k.key").split("\n").length, 3);
+  it("pins the IV explicitly", () => {
+    // ffmpeg's hlsenc does not implement RFC 8216's "absent IV means use the
+    // media sequence number". Given no IV it silently encrypts every segment
+    // under an all-zero one, so the line has to be there.
+    const lines = buildKeyInfo("/v1/keys/k", "/k.key", IV).trimEnd().split("\n");
+    assert.equal(lines.length, 3);
+    assert.equal(lines[2], IV);
+  });
+
+  it("rejects an IV that is not 32 hex digits", () => {
+    assert.throws(() => buildKeyInfo("/v1/keys/k", "/k.key", "abc"), /32 hex/);
+  });
+});
+
+describe("deriveIv", () => {
+  const KEY = "0123456789abcdef0123456789abcdef";
+
+  it("returns 32 hex digits", () => {
+    assert.match(deriveIv(KEY, "stream-1"), /^[0-9a-f]{32}$/);
+  });
+
+  it("is stable for a given key and stream", () => {
+    // A restart mid-class must not change the IV, or every segment written
+    // before it becomes undecryptable under the playlist's key line.
+    assert.equal(deriveIv(KEY, "stream-1"), deriveIv(KEY, "stream-1"));
+  });
+
+  it("differs per stream and per key", () => {
+    assert.notEqual(deriveIv(KEY, "stream-1"), deriveIv(KEY, "stream-2"));
+    assert.notEqual(
+      deriveIv(KEY, "stream-1"),
+      deriveIv("fedcba9876543210fedcba9876543210", "stream-1"),
+    );
+  });
+
+  it("is never all zeroes", () => {
+    assert.notEqual(deriveIv(KEY, "stream-1"), "0".repeat(32));
   });
 });

@@ -6,14 +6,15 @@
  * replay serves. All that has to happen is turning the rolling live playlist
  * (which only ever lists the last few seconds) into a complete VOD playlist.
  *
- * The one thing that must not break: AES-128 IVs. With no IV pinned in the key
- * info file, ffmpeg derives each segment's IV from its *absolute* media
- * sequence number. So the VOD playlist has to preserve those numbers -- if it
- * renumbered from zero, every segment would fail to decrypt.
+ * Absolute media sequence numbers are preserved rather than renumbered from
+ * zero. The IV no longer depends on them (it is pinned explicitly in the key
+ * info file -- see `ladder.ts`), but keeping them means a segment's identity is
+ * the same in the live window, the VOD playlist and object storage, which is
+ * what lets the replay reuse the live bytes untouched.
  */
 
 export interface PlaylistSegment {
-  /** Absolute media sequence number. Also the AES-128 IV. */
+  /** Absolute media sequence number, as written by ffmpeg. */
   sequence: number;
   duration: number;
   uri: string;

@@ -23,8 +23,8 @@
     "restart": "docker compose --env-file .env -f infra/docker-compose.yml restart",
     "logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
     "ps": "docker compose --env-file .env -f infra/docker-compose.yml ps",
-    "smoke:stream": "bash scripts/smoke-stream.sh",
-    "smoke:verify": "bash scripts/smoke-verify.sh"
+    "smoke:stream": "node scripts/smoke-stream.mjs",
+    "smoke:verify": "node scripts/smoke-verify.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

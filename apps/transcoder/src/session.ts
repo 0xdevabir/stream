@@ -17,6 +17,7 @@ import {
   type SourceInfo,
   buildFfmpegArgs,
   buildKeyInfo,
+  deriveIv,
   buildMasterPlaylist,
   selectRenditions,
 } from "./ladder";
@@ -130,7 +131,11 @@ export class StreamSession {
     });
     await writeFile(
       infoPath,
-      buildKeyInfo(keyUrl(config.contentKeyId), keyPath),
+      buildKeyInfo(
+        keyUrl(config.contentKeyId),
+        keyPath,
+        deriveIv(config.contentKeyHex, this.streamId),
+      ),
       { mode: 0o600 },
     );
   }

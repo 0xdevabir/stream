@@ -130,7 +130,24 @@ async function main() {
   }) {
     const contentKey = generateContentKey();
     const existing = await prisma.stream.findUnique({ where: { slug: opts.slug } });
-    if (existing) return { stream: existing, streamKey: opts.streamKey };
+
+    if (existing) {
+      // Re-seeding is how you reset the dev loop, so a class that has already
+      // been broadcast has to become publishable again. Leaving it ENDED means
+      // the MediaMTX auth hook refuses the next publish and the smoke test
+      // fails with a misleading "authentication failed".
+      const reopened = await prisma.stream.update({
+        where: { id: existing.id },
+        data: {
+          status: "SCHEDULED",
+          scheduledAt: opts.scheduledAt,
+          startedAt: null,
+          endedAt: null,
+          peakViewers: 0,
+        },
+      });
+      return { stream: reopened, streamKey: opts.streamKey };
+    }
 
     const stream = await prisma.stream.create({
       data: {

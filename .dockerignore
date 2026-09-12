@@ -1,0 +1,31 @@
+# The build context is the repository root (see infra/docker-compose.yml), so
+# anything not excluded here is uploaded to the daemon on every build and
+# invalidates the layer cache when it changes. Local install and build output
+# is both the largest and the most frequently touched, so it matters most.
+
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/coverage
+
+.git
+.gitignore
+
+# Secrets must never reach an image layer. The compose file injects the real
+# values as environment variables at run time instead.
+.env
+.env.*
+!.env.example
+.seed-output.json
+**/*.key
+**/*.keyinfo
+
+# Local media and container state.
+media/
+docs/
+*.md
+!README.md
+
+.DS_Store
+*.log
