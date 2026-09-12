@@ -1,0 +1,356 @@
+// Schema for the live-class platform.
+//
+// Enum values are mirrored in `packages/shared/src/enums.ts` so the browser
+// bundle never has to import the Prisma client. `src/enum-parity.test.ts`
+// fails if the two drift.
+
+generator client {
+  provider = "prisma-client-js"
+  // "native" covers local development on macOS; the Debian targets cover the
+  // node:24-bookworm-slim containers on both amd64 and arm64 hosts.
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum StreamStatus {
+  SCHEDULED
+  LIVE
+  PROCESSING
+  ENDED
+  CANCELLED
+}
+
+enum AccessMode {
+  PUBLIC
+  LINK
+  PASSWORD
+  ENROLLED
+  ORG
+}
+
+enum RecordingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum MessageKind {
+  CHAT
+  QUESTION
+  SYSTEM
+}
+
+enum LatencyMode {
+  LOW
+  ULTRA
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Ceiling on concurrent live streams; the transcoder is the scarce resource.
+  maxConcurrentStreams Int @default(3)
+
+  memberships Membership[]
+  courses     Course[]
+  streams     Stream[]
+  invitations Invitation[]
+  auditLogs   AuditLog[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  avatarUrl    String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  memberships       Membership[]
+  instructedStreams Stream[]           @relation("StreamInstructor")
+  enrollments       Enrollment[]
+  courseEnrollments CourseEnrollment[]
+  messages          ChatMessage[]
+  votes             QuestionVote[]
+  viewerSessions    ViewerSession[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrgRole  @default(STUDENT)
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+}
+
+model Course {
+  id             String   @id @default(cuid())
+  organizationId String
+  title          String
+  description    String?
+  slug           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  streams      Stream[]
+  enrollments  CourseEnrollment[]
+
+  @@unique([organizationId, slug])
+}
+
+model Stream {
+  id             String  @id @default(cuid())
+  organizationId String
+  courseId       String?
+  instructorId   String
+
+  slug        String  @unique
+  title       String
+  description String?
+  posterUrl   String?
+
+  status     StreamStatus @default(SCHEDULED)
+  accessMode AccessMode   @default(ENROLLED)
+
+  // Only set when accessMode is PASSWORD.
+  passwordHash String?
+  // Unguessable component of the share link, used by LINK mode.
+  shareToken   String  @unique
+
+  latencyMode      LatencyMode @default(LOW)
+  recordEnabled    Boolean     @default(true)
+  chatEnabled      Boolean     @default(true)
+  questionsEnabled Boolean     @default(true)
+  slowModeSeconds  Int         @default(0)
+
+  // Ingest credential. Two representations, for two different jobs:
+  //   streamKeyHash    - SHA-256, for the O(1) lookup the publish auth hook
+  //                      performs on every connection attempt.
+  //   streamKeyWrapped - AES-256-GCM under CONTENT_KEY_SECRET, so the
+  //                      instructor can re-open the OBS setup panel and read
+  //                      their key again without us rotating it.
+  streamKeyHash      String
+  streamKeyWrapped   Bytes
+  streamKeyPrefix    String
+  streamKeyRotatedAt DateTime @default(now())
+
+  // AES-128 content key for the HLS segments. `contentKeyId` is what appears
+  // in the playlist's EXT-X-KEY URI; the key itself is stored wrapped with
+  // CONTENT_KEY_SECRET so a database dump alone cannot decrypt recordings.
+  contentKeyId      String @unique
+  contentKeyWrapped Bytes
+
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  endedAt     DateTime?
+
+  peakViewers Int @default(0)
+  totalViews  Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  course         Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  instructor     User            @relation("StreamInstructor", fields: [instructorId], references: [id])
+  enrollments    Enrollment[]
+  recordings     Recording[]
+  messages       ChatMessage[]
+  viewerSessions ViewerSession[]
+  invitations    Invitation[]
+
+  @@index([organizationId, status, scheduledAt])
+  @@index([instructorId, status])
+  @@index([courseId])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  streamId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, streamId])
+  @@index([streamId])
+}
+
+model CourseEnrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+}
+
+model Recording {
+  id       String          @id @default(cuid())
+  streamId String
+  status   RecordingStatus @default(PENDING)
+
+  durationSeconds Float?
+  sizeBytes       BigInt?
+  segmentCount    Int      @default(0)
+  renditions      String[]
+
+  // Object-storage prefix, e.g. "vod/<recordingId>".
+  storagePrefix String?
+  posterKey     String?
+  // Progressive MP4 remux offered as a download.
+  downloadKey   String?
+
+  error     String?
+  createdAt DateTime  @default(now())
+  readyAt   DateTime?
+
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@index([streamId, createdAt])
+  @@index([status])
+}
+
+model ChatMessage {
+  id       String      @id @default(cuid())
+  streamId String
+  userId   String?
+  kind     MessageKind @default(CHAT)
+  body     String
+
+  pinned      Boolean @default(false)
+  answered    Boolean @default(false)
+  upvoteCount Int     @default(0)
+
+  deletedAt   DateTime?
+  deletedById String?
+
+  createdAt DateTime @default(now())
+
+  stream Stream         @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user   User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  votes  QuestionVote[]
+
+  @@index([streamId, createdAt])
+  @@index([streamId, kind, upvoteCount])
+}
+
+model QuestionVote {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model ViewerSession {
+  id       String  @id @default(cuid())
+  streamId String
+  userId   String?
+
+  // The playback token's jti. Lets us revoke a specific session and enforce
+  // the per-user concurrency cap.
+  tokenId String @unique
+
+  joinedAt     DateTime  @default(now())
+  lastSeenAt   DateTime  @default(now())
+  leftAt       DateTime?
+  watchSeconds Int       @default(0)
+
+  maxRendition String?
+  // Truncated SHA-256 of the IP; enough to spot abuse, not enough to track.
+  ipHash       String?
+  userAgent    String?
+
+  stream Stream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([streamId, joinedAt])
+  @@index([userId, streamId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ipHash    String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String
+  streamId       String?
+  email          String
+  role           OrgRole   @default(STUDENT)
+  token          String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stream       Stream?      @relation(fields: [streamId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, email])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String?
+  actorId        String?
+  action         String
+  targetType     String?
+  targetId       String?
+  metadata       Json?
+  ipHash         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+}

@@ -1,0 +1,206 @@
+# The single front door. Everything the browser touches is same-origin, which
+# is what lets one HttpOnly playback cookie authorize the API, the HLS
+# segments, the AES key endpoint and the WebSocket alike -- no CORS, no tokens
+# in query strings, and native Safari HLS works without a custom loader.
+#
+#   /            -> Next.js
+#   /v1/, /ws/   -> API
+#   /hls/        -> live segments from disk        (auth_request)
+#   /vod/        -> recordings from object storage (auth_request)
+#   /webrtc/     -> MediaMTX WHIP publish / WHEP playback
+#
+# Rendered from this template by the official nginx entrypoint's envsubst pass;
+# ${VARS} in this file are environment variables, $vars are nginx variables.
+
+# Docker's embedded DNS. Resolving backends per-request (rather than once at
+# startup) means a restarted container is picked up without reloading nginx.
+resolver 127.0.0.11 ipv6=off valid=10s;
+
+# Authorization decisions are cached so that a 1000-viewer class costs the API
+# a handful of requests per second instead of one per segment per viewer. The
+# cookie is part of the key, so viewers can never share a cached decision.
+proxy_cache_path /var/cache/nginx/authz levels=1:2 keys_zone=authz:16m
+                 max_size=64m inactive=120s use_temp_path=off;
+
+# Collapses a media request down to the thing authorization actually depends
+# on, so every segment of a given stream shares one cache entry.
+map $request_uri $media_scope {
+    default                                    "";
+    "~^/hls/(?<sid>[A-Za-z0-9_-]+)/"           "live:$sid";
+    "~^/vod/(?<rid>[A-Za-z0-9_-]+)/"           "vod:$rid";
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ""      close;
+}
+
+log_format media '$remote_addr $status $request_time "$request" '
+                 'scope=$media_scope cache=$upstream_cache_status '
+                 'bytes=$body_bytes_sent';
+
+server {
+    listen 80 default_server;
+    server_name _;
+
+    access_log /var/log/nginx/access.log media;
+
+    # Resolved at request time via the resolver above.
+    set $api_host "api:4000";
+    set $web_host "web:3000";
+    set $mtx_host "mediamtx:8889";
+    set $s3_host  "minio:9000";
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # SDP offers are a few KB; nothing else here accepts a large body.
+    client_max_body_size 4m;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ── Authorization subrequest ───────────────────────────────────────────
+    # 204 allows, 401/403 denies. The API resolves the playback cookie against
+    # the stream's access mode; see apps/api/src/routes/internal.ts.
+    location = /_authz {
+        internal;
+
+        proxy_method      GET;
+        proxy_pass        http://$api_host/internal/edge/authz;
+        proxy_pass_request_body off;
+        proxy_set_header  Content-Length "";
+        proxy_set_header  X-Original-URI $request_uri;
+        proxy_set_header  X-Media-Scope  $media_scope;
+        proxy_set_header  X-Real-IP      $remote_addr;
+        proxy_set_header  X-Internal-Token "${INTERNAL_TOKEN}";
+
+        proxy_cache       authz;
+        proxy_cache_key   "$cookie_pt|$media_scope";
+        proxy_cache_valid 204 200 15s;
+        proxy_cache_valid 401 403 404 5s;
+        # One request fills the cache; the rest wait rather than stampeding.
+        proxy_cache_lock  on;
+        proxy_cache_lock_timeout 3s;
+    }
+
+    # ── Live HLS ───────────────────────────────────────────────────────────
+    # Playlists are rewritten every segment, so they must never be cached.
+    location ~ ^/hls/(?<sid>[A-Za-z0-9_-]+)/(?<rest>[A-Za-z0-9_/-]*\.m3u8)$ {
+        auth_request /_authz;
+        alias /media/live/$sid/$rest;
+
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options nosniff always;
+        gzip on;
+        gzip_types application/vnd.apple.mpegurl;
+    }
+
+    # Segments are content-addressed by sequence number and never rewritten,
+    # so they can be cached hard -- but only privately: they are authorized
+    # per viewer and must not land in a shared proxy.
+    location ~ ^/hls/(?<sid>[A-Za-z0-9_-]+)/(?<rest>[A-Za-z0-9_/-]+\.(?:ts|m4s|mp4))$ {
+        auth_request /_authz;
+        alias /media/live/$sid/$rest;
+
+        add_header Cache-Control "private, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+
+        sendfile on;
+        tcp_nopush on;
+        # Segments are ~100-600 KB; buffering the whole file wastes memory.
+        output_buffers 4 64k;
+    }
+
+    # ── Recordings (VOD) ───────────────────────────────────────────────────
+    # Proxied from object storage. The segments are AES-128 encrypted and the
+    # key endpoint is separately authorized, so this auth_request is the outer
+    # of two independent gates rather than the only one.
+    location ~ ^/vod/(?<rid>[A-Za-z0-9_-]+)/(?<rest>[A-Za-z0-9_/-]+\.(?:m3u8|ts|m4s|mp4|jpg|vtt))$ {
+        auth_request /_authz;
+
+        proxy_pass       http://$s3_host/${S3_BUCKET}/vod/$rid/$rest;
+        proxy_set_header Host $s3_host;
+        proxy_set_header Authorization "";
+        proxy_hide_header x-amz-id-2;
+        proxy_hide_header x-amz-request-id;
+        proxy_hide_header Set-Cookie;
+        proxy_intercept_errors off;
+
+        add_header Cache-Control "private, max-age=86400" always;
+    }
+
+    # ── WebRTC: WHIP publish and WHEP playback ─────────────────────────────
+    # Not gated here: MediaMTX authorizes these itself by calling the API's
+    # /internal/mediamtx/auth hook, which applies the same access rules.
+    location ^~ /webrtc/ {
+        rewrite ^/webrtc/(.*)$ /$1 break;
+        proxy_pass http://$mtx_host;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Session URLs MediaMTX hands back must stay inside our prefix.
+        proxy_redirect ~^/(.*)$ /webrtc/$1;
+
+        # ICE negotiation is latency-sensitive and tiny; do not buffer it.
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 60s;
+    }
+
+    # ── WebSocket (chat, Q&A, presence, status) ────────────────────────────
+    location /ws/ {
+        proxy_pass http://$api_host$request_uri;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host       $host;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_buffering off;
+        # Long enough to outlast a quiet room; the client also heartbeats.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # ── API ────────────────────────────────────────────────────────────────
+    location /v1/ {
+        proxy_pass http://$api_host$request_uri;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        add_header Cache-Control "no-store" always;
+    }
+
+    # Internal endpoints are for the compose network only; never expose them.
+    location /internal/ {
+        return 404;
+    }
+
+    # ── Web app ────────────────────────────────────────────────────────────
+    location / {
+        proxy_pass http://$web_host$request_uri;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

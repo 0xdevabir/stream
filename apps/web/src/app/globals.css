@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/*
+ * A dark palette by default: viewers spend most of their time looking at a
+ * video surface, and a bright chrome around it visibly hurts perceived
+ * contrast in the picture.
+ */
+@theme {
+  --color-ink-950: oklch(0.16 0.012 265);
+  --color-ink-900: oklch(0.2 0.013 265);
+  --color-ink-850: oklch(0.24 0.014 265);
+  --color-ink-800: oklch(0.29 0.015 265);
+  --color-ink-700: oklch(0.38 0.015 265);
+  --color-ink-500: oklch(0.58 0.014 265);
+  --color-ink-300: oklch(0.78 0.01 265);
+  --color-ink-100: oklch(0.93 0.006 265);
+
+  --color-brand-400: oklch(0.76 0.14 235);
+  --color-brand-500: oklch(0.68 0.16 240);
+  --color-brand-600: oklch(0.59 0.17 245);
+
+  --color-live-500: oklch(0.65 0.21 25);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-ink-950 text-ink-100 font-sans antialiased;
+  }
+
+  /* Focus rings must survive on a dark ground; the default ring is too dim. */
+  :focus-visible {
+    @apply outline-brand-400 outline-2 outline-offset-2;
+  }
+
+  ::selection {
+    @apply bg-brand-600/40;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-ink-900 border-ink-800 rounded-xl border;
+  }
+
+  .input {
+    @apply bg-ink-950 border-ink-800 placeholder:text-ink-500 focus:border-brand-500 w-full rounded-lg border px-3 py-2 text-sm transition-colors outline-none;
+  }
+
+  .label {
+    @apply text-ink-300 mb-1.5 block text-xs font-medium tracking-wide uppercase;
+  }
+}
+
+/* The live pulse. Reduced-motion users get a static dot instead. */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-dot {
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
+
+/* Hide the native controls' fullscreen-only artefacts we replace ourselves. */
+video::-webkit-media-controls-overlay-play-button {
+  display: none;
+}

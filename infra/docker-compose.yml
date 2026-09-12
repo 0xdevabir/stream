@@ -1,0 +1,202 @@
+# Run from the repository root:
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d --build
+# or simply `pnpm up`, which wraps exactly that.
+
+name: stream
+
+x-app-env: &app-env
+  NODE_ENV: ${NODE_ENV:-development}
+  DATABASE_URL: ${DATABASE_URL}
+  REDIS_URL: ${REDIS_URL}
+  PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+  AUTH_SECRET: ${AUTH_SECRET}
+  PLAYBACK_SECRET: ${PLAYBACK_SECRET}
+  INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+  CONTENT_KEY_SECRET: ${CONTENT_KEY_SECRET}
+  S3_ENDPOINT: ${S3_ENDPOINT}
+  S3_REGION: ${S3_REGION}
+  S3_BUCKET: ${S3_BUCKET}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE}
+  MEDIAMTX_HOST: ${MEDIAMTX_HOST}
+  MEDIAMTX_API_PORT: ${MEDIAMTX_API_PORT}
+  MEDIAMTX_RTSP_PORT: ${MEDIAMTX_RTSP_PORT}
+  MEDIA_ROOT: ${MEDIA_ROOT}
+  LADDER: ${LADDER}
+  VIDEO_ENCODER: ${VIDEO_ENCODER}
+  X264_PRESET: ${X264_PRESET}
+  HLS_SEGMENT_SECONDS: ${HLS_SEGMENT_SECONDS}
+  HLS_LIST_SIZE: ${HLS_LIST_SIZE}
+  INGEST_RTMP_URL: ${INGEST_RTMP_URL}
+  INGEST_SRT_HOST: ${INGEST_SRT_HOST}
+  INGEST_SRT_PORT: ${INGEST_SRT_PORT}
+  ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
+  REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL}
+  PLAYBACK_TOKEN_TTL: ${PLAYBACK_TOKEN_TTL}
+  MAX_CONCURRENT_SESSIONS_PER_USER: ${MAX_CONCURRENT_SESSIONS_PER_USER}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Chat backlog and presence are reconstructible, so persistence is a
+    # convenience rather than a requirement -- AOF only, no RDB snapshots.
+    command: ["redis-server", "--appendonly", "yes", "--save", ""]
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY}
+    ports:
+      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+
+  # Creates the recordings bucket. Anonymous download is enabled *inside the
+  # compose network only* -- MinIO is never published to the internet, and the
+  # segments it holds are AES-128 encrypted regardless. The edge still runs an
+  # auth_request in front of every /vod/ request.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    environment:
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}" >/dev/null 2>&1; do
+          echo "waiting for minio..."; sleep 1;
+        done
+        mc mb --ignore-existing "local/$${S3_BUCKET}"
+        mc anonymous set download "local/$${S3_BUCKET}"
+        echo "minio ready: bucket $${S3_BUCKET}"
+    restart: "no"
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.0
+    restart: unless-stopped
+    environment:
+      # Browsers cannot reach Docker-internal IPs, so the ICE candidates we
+      # advertise have to be the host's. Set this to the server's public IP or
+      # hostname in production.
+      MTX_WEBRTCADDITIONALHOSTS: ${WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "${MEDIAMTX_RTMP_PORT:-1935}:1935"
+      - "${MEDIAMTX_SRT_PORT:-8890}:8890/udp"
+      # WebRTC ICE. Must be reachable directly by browsers; the signalling
+      # itself goes through the edge on :8080.
+      - "8189:8189/udp"
+      - "8189:8189/tcp"
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: "4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  transcoder:
+    build:
+      context: ..
+      dockerfile: infra/transcoder.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      API_BASE_URL: http://api:4000
+    volumes:
+      - media:/media
+    depends_on:
+      - api
+      - mediamtx
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+      args:
+        NEXT_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      PORT: "3000"
+      # Server-side rendering talks to the API directly, bypassing the edge.
+      API_INTERNAL_URL: http://api:4000
+    depends_on:
+      - api
+
+  edge:
+    build:
+      context: ..
+      dockerfile: infra/edge.Dockerfile
+    restart: unless-stopped
+    environment:
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      S3_BUCKET: ${S3_BUCKET}
+    ports:
+      - "${EDGE_HTTP_PORT:-8080}:80"
+    volumes:
+      - media:/media:ro
+    depends_on:
+      - api
+      - web
+      - mediamtx
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  # Live segments. Shared read-write with the transcoder, read-only with the
+  # edge. Sized for (ladder bitrate x class length); see docs/operations.md.
+  media:

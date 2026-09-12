@@ -1,0 +1,100 @@
+# MediaMTX v1.21.x -- ingest only.
+#
+# This server accepts RTMP, SRT, and WHIP publishes, and serves WHEP for the
+# sub-second playback mode. It does NOT serve HLS: our own transcoder produces
+# the encrypted ABR ladder, because MediaMTX's HLS output is single-bitrate and
+# unencrypted.
+#
+# Every authorization decision is delegated to the API over HTTP. The image is
+# built FROM scratch (no shell), so the transcoder discovers active publishers
+# by polling the control API rather than through runOn* hooks.
+
+logLevel: info
+logDestinations: [stdout]
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+
+###############################################
+# Authentication -- delegated to the API
+
+authMethod: http
+authHTTPAddress: http://api:4000/internal/mediamtx/auth
+
+# The control API is reachable only on the compose network and is what the
+# transcoder polls; excluding it avoids an auth round-trip per poll.
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: pprof
+
+###############################################
+# Control API -- polled by the transcoder
+
+api: true
+apiAddress: :9997
+
+metrics: false
+pprof: false
+playback: false
+
+###############################################
+# Ingest / internal pull
+
+# RTSP exists purely so the transcoder can pull the published stream back out
+# on the internal network. TCP only: we want head-of-line reliability here, not
+# the lowest possible latency, and it traverses Docker networking predictably.
+rtsp: true
+rtspTransports: [tcp]
+rtspEncryption: "no"
+rtspAddress: :8554
+rtspAuthMethods: [basic]
+
+# OBS and friends. Server URL is rtmp://host:1935/live and the stream key is
+# "<streamId>?key=<secret>", which MediaMTX splits into path + query.
+rtmp: true
+rtmpEncryption: "no"
+rtmpAddress: :1935
+
+# SRT for lossy uplinks; the streamid carries path and credentials.
+srt: true
+srtAddress: :8890
+
+###############################################
+# WebRTC -- WHIP publish (browser "Go Live") and WHEP read (ultra-low latency)
+
+webrtc: true
+webrtcAddress: :8889
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+# A TCP ICE candidate on the same port number rescues viewers behind networks
+# that block UDP, at the cost of added delay under congestion.
+webrtcLocalTCPAddress: :8189
+# Interface IPs inside Docker are unreachable from a browser, so we advertise
+# only what the operator configures via MTX_WEBRTCADDITIONALHOSTS.
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts: []
+
+###############################################
+# Disabled outputs
+
+# Our transcoder owns HLS packaging (encrypted + multi-bitrate).
+hls: false
+moq: false
+
+###############################################
+# Paths
+
+pathDefaults:
+  source: publisher
+  # MediaMTX's own recorder is off: recordings are produced from the encrypted
+  # HLS ladder the transcoder already writes, with no second encode.
+  record: false
+  # A reconnecting encoder should reclaim its path rather than be rejected.
+  overridePublisher: true
+
+# Only `live/<id>` paths may exist. Anything else is rejected outright, so a
+# leaked credential cannot be used to create arbitrary streams on the server.
+paths:
+  "~^live/[A-Za-z0-9_-]+$":

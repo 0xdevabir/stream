@@ -1,0 +1,13 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 10+ refuses to run a dependency's install scripts unless it is named
+# here. These four genuinely need one: Prisma downloads and positions its query
+# engine binaries, and esbuild fetches its platform binary. Without this the
+# install reports success but `prisma generate` then fails.
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  prisma: true
+  esbuild: true

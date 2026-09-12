@@ -1,0 +1,34 @@
+{
+  "name": "stream",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @stream/db run generate",
+    "db:migrate": "pnpm --filter @stream/db run migrate",
+    "db:push": "pnpm --filter @stream/db run push",
+    "db:seed": "pnpm --filter @stream/db run seed",
+    "db:studio": "pnpm --filter @stream/db run studio",
+    "setup": "node scripts/gen-secrets.mjs && pnpm install && pnpm --filter @stream/shared run build && pnpm --filter @stream/db run generate",
+    "up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --build",
+    "down": "docker compose --env-file .env -f infra/docker-compose.yml down",
+    "restart": "docker compose --env-file .env -f infra/docker-compose.yml restart",
+    "logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
+    "ps": "docker compose --env-file .env -f infra/docker-compose.yml ps",
+    "smoke:stream": "bash scripts/smoke-stream.sh",
+    "smoke:verify": "bash scripts/smoke-verify.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.2"
+  }
+}
