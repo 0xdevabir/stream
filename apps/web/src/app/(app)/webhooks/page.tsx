@@ -3,6 +3,7 @@
 import { PROVIDER_WEBHOOK_EVENTS } from "@stream/shared";
 import { useCallback, useEffect, useState } from "react";
 
+import { PageHeader, Panel } from "@/components/console/layout";
 import {
   Alert,
   Button,
@@ -85,6 +86,31 @@ export default function WebhooksPage() {
     }
   };
 
+  const setEnabled = async (id: string, enabled: boolean) => {
+    setBusy(true);
+    try {
+      await api.patch(`/v1/console/webhooks/${id}`, { enabled });
+      await load();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm("Delete this webhook endpoint?")) return;
+    setBusy(true);
+    try {
+      await api.del(`/v1/console/webhooks/${id}`);
+      await load();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="grid place-items-center py-24">
@@ -94,15 +120,12 @@ export default function WebhooksPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Webhooks</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Receive <code className="text-ink-300">live.started</code>,{" "}
-          <code className="text-ink-300">live.ended</code>, and video lifecycle
-          events in your LMS.
-        </p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Access"
+        title="Webhooks"
+        description="Receive live.started, live.ended, and video lifecycle events in your LMS."
+      />
 
       {error && <Alert>{error}</Alert>}
 
@@ -115,7 +138,7 @@ export default function WebhooksPage() {
 
       <form
         onSubmit={create}
-        className="border-ink-800 bg-ink-900/30 space-y-4 rounded-xl border p-4"
+        className="border-ink-800/80 from-ink-900/60 to-ink-950/40 space-y-4 rounded-xl border bg-gradient-to-b p-4"
       >
         <Field label="Endpoint URL">
           <Input value={url} onChange={(e) => setUrl(e.target.value)} required />
@@ -124,7 +147,10 @@ export default function WebhooksPage() {
           <p className="label">Events</p>
           <div className="mt-2 flex flex-wrap gap-3">
             {PROVIDER_WEBHOOK_EVENTS.map((event) => (
-              <label key={event} className="text-ink-300 flex items-center gap-2 text-sm">
+              <label
+                key={event}
+                className="text-ink-300 flex items-center gap-2 text-sm"
+              >
                 <input
                   type="checkbox"
                   checked={events.includes(event)}
@@ -141,34 +167,60 @@ export default function WebhooksPage() {
       </form>
 
       {items.length === 0 ? (
-        <EmptyState title="No webhooks" body="Add an HTTPS endpoint to get events." />
+        <EmptyState
+          title="No webhooks"
+          body="Add an HTTPS endpoint to get events."
+        />
       ) : (
-        <div className="border-ink-800 overflow-hidden rounded-xl border">
+        <Panel>
           <table className="w-full text-left text-sm">
-            <thead className="bg-ink-900/60 text-ink-500 text-xs uppercase">
+            <thead className="bg-ink-900/50 text-ink-500 text-[10px] tracking-[0.08em] uppercase">
               <tr>
-                <th className="px-4 py-2 font-medium">URL</th>
-                <th className="px-4 py-2 font-medium">Events</th>
-                <th className="px-4 py-2 font-medium">Created</th>
+                <th className="px-4 py-2.5 font-semibold">URL</th>
+                <th className="px-4 py-2.5 font-semibold">Events</th>
+                <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 font-semibold" />
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-ink-800 border-t">
+                <tr key={item.id} className="border-ink-800/80 border-t">
                   <td className="max-w-xs truncate px-4 py-3 font-mono text-xs">
                     {item.url}
                   </td>
                   <td className="text-ink-500 px-4 py-3 text-xs">
                     {item.events.join(", ")}
                   </td>
-                  <td className="text-ink-500 px-4 py-3">
-                    {new Date(item.createdAt).toLocaleString()}
+                  <td className="px-4 py-3 text-xs">
+                    {item.enabled ? (
+                      <span className="text-brand-400">enabled</span>
+                    ) : (
+                      <span className="text-ink-500">disabled</span>
+                    )}
+                  </td>
+                  <td className="space-x-2 px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void setEnabled(item.id, !item.enabled)}
+                    >
+                      {item.enabled ? "Disable" : "Enable"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void remove(item.id)}
+                    >
+                      Delete
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Panel>
       )}
     </div>
   );

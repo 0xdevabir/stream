@@ -68,21 +68,20 @@ Playback for embeds uses a **signed JWT** (`token` query param or
 
 ## Developer console
 
-Cookie-authenticated UI at `http://localhost:8080` (after seed):
+| Panel | URL | Seed login |
+|---|---|---|
+| Super admin | `/admin` | `admin@example.com` / `changeme-please` |
+| Tenant / consumer | `/dashboard` | `console@example.com` / `changeme-please` |
+| Integration guide | `/guides/integration` | public |
 
-| Account | Password |
-|---|---|
-| `console@example.com` | `changeme-please` |
-
-Console calls `/v1/console/*` (same capabilities as the provider API, resolved
-from the signed-in user's organization → Tenant). Create additional tenants
-with:
+Cookie APIs: `/v1/admin/*` (platform), `/v1/console/*` (tenant). Create tenants
+in the super-admin UI or:
 
 ```bash
 pnpm exec tsx scripts/create-tenant.ts --name "Acme LMS"
 ```
 
-The script prints a one-time `apiKey`, `consoleEmail`, and `consolePassword`.
 Self-serve signup is not enabled.
+
 
 

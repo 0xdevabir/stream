@@ -63,21 +63,42 @@ export async function resolveTenantFromOrganization(
 export async function createTenant(input: {
   name: string;
   apiKeyName?: string;
+  maxConcurrentLives?: number;
+  maxMinutesPerMonth?: number;
+  consoleEmail?: string;
+  consolePassword?: string;
 }): Promise<{
   tenantId: string;
   slug: string;
+  organizationId: string;
   apiKey: string;
   apiKeyPrefix: string;
+  consoleEmail: string;
+  consolePassword: string;
 }> {
   const slug = slugify(input.name);
-  const passwordHash = await hashPassword(randomBytes(32).toString("hex"));
-  const serviceEmail = `provider+${slug}@stream.local`;
+  const servicePasswordHash = await hashPassword(
+    randomBytes(32).toString("hex"),
+  );
+  const consolePassword =
+    input.consolePassword ?? randomBytes(9).toString("base64url");
+  const consoleEmail =
+    input.consoleEmail ?? `console+${slug}@stream.local`;
+  const consolePasswordHash = await hashPassword(consolePassword);
 
   const serviceUser = await prisma.user.create({
     data: {
-      email: serviceEmail,
+      email: `provider+${slug}@stream.local`,
       name: `${input.name} (API)`,
-      passwordHash,
+      passwordHash: servicePasswordHash,
+    },
+  });
+
+  const consoleUser = await prisma.user.create({
+    data: {
+      email: consoleEmail,
+      name: `${input.name} Console`,
+      passwordHash: consolePasswordHash,
     },
   });
 
@@ -85,12 +106,12 @@ export async function createTenant(input: {
     data: {
       name: input.name,
       slug: `tenant-${slug}`,
-      maxConcurrentStreams: 3,
+      maxConcurrentStreams: input.maxConcurrentLives ?? 3,
       memberships: {
-        create: {
-          userId: serviceUser.id,
-          role: "OWNER",
-        },
+        create: [
+          { userId: serviceUser.id, role: "OWNER" },
+          { userId: consoleUser.id, role: "OWNER" },
+        ],
       },
     },
   });
@@ -101,6 +122,8 @@ export async function createTenant(input: {
       slug,
       organizationId: organization.id,
       serviceUserId: serviceUser.id,
+      maxConcurrentLives: input.maxConcurrentLives ?? 3,
+      maxMinutesPerMonth: input.maxMinutesPerMonth ?? 10_000,
     },
   });
 
@@ -117,8 +140,11 @@ export async function createTenant(input: {
   return {
     tenantId: tenant.id,
     slug: tenant.slug,
+    organizationId: organization.id,
     apiKey: key.raw,
     apiKeyPrefix: key.prefix,
+    consoleEmail,
+    consolePassword,
   };
 }
 
@@ -181,4 +207,3 @@ export function requireScope(ctx: TenantContext, scope: string): void {
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
-

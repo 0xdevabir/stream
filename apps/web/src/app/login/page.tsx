@@ -1,5 +1,6 @@
 "use client";
 
+import type { SessionUser } from "@stream/shared";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -15,6 +16,10 @@ export default function LoginPage() {
   );
 }
 
+function homeFor(user: SessionUser): string {
+  return user.platformAdmin ? "/admin" : "/dashboard";
+}
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -25,19 +30,21 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const next = safeNext(params.get("next"));
+  const nextParam = params.get("next");
 
   useEffect(() => {
-    if (user) router.replace(next);
-  }, [user, router, next]);
+    if (!user) return;
+    const next = safeNext(nextParam, user);
+    router.replace(next);
+  }, [user, router, nextParam]);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await signIn(email, password);
-      router.replace(next);
+      const signedIn = await signIn(email, password);
+      router.replace(safeNext(nextParam, signedIn));
     } catch (cause) {
       setError(errorMessage(cause, "Could not sign in"));
     } finally {
@@ -52,13 +59,13 @@ function LoginForm() {
           <div className="bg-brand-600 mx-auto mb-3 grid size-10 place-items-center rounded-xl">
             ▶
           </div>
-          <h1 className="text-xl font-semibold">Stream console</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Stream</h1>
           <p className="text-ink-500 mt-1 text-sm">
-            Manage live inputs, API keys, and webhooks for your tenant.
+            Sign in to the platform admin or your tenant console.
           </p>
         </div>
 
-        <form onSubmit={submit} className="card space-y-4 p-6">
+        <form onSubmit={submit} className="card space-y-4 p-6 shadow-[0_0_0_1px_oklch(1_0_0/0.03)]">
           {error && <Alert>{error}</Alert>}
 
           <Field label="Email">
@@ -68,6 +75,7 @@ function LoginForm() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
+              placeholder="console@example.com"
             />
           </Field>
 
@@ -85,19 +93,32 @@ function LoginForm() {
             Sign in
           </Button>
 
-          <p className="text-ink-500 text-center text-xs">
-            Tenants are provisioned by an operator. Self-serve signup is not
-            enabled.
-          </p>
+          <div className="text-ink-500 space-y-1 border-t border-ink-800 pt-3 text-center text-[11px]">
+            <p>
+              Admin →{" "}
+              <span className="text-ink-400 font-mono">/admin</span>
+              {" · "}
+              Tenant →{" "}
+              <span className="text-ink-400 font-mono">/dashboard</span>
+            </p>
+            <p>
+              <a href="/guides/integration" className="text-ink-300 underline">
+                Integration guide
+              </a>
+            </p>
+          </div>
         </form>
       </div>
     </main>
   );
 }
 
-function safeNext(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
+function safeNext(value: string | null, user: SessionUser): string {
+  if (value && value.startsWith("/") && !value.startsWith("//")) {
+    if (value.startsWith("/admin") && !user.platformAdmin) {
+      return "/dashboard";
+    }
+    return value;
   }
-  return value;
+  return homeFor(user);
 }

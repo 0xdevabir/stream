@@ -3,6 +3,7 @@
 import type { LiveInput, PlaybackTokenResponse } from "@stream/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { PageHeader } from "@/components/console/layout";
 import { Player } from "@/components/player/Player";
 import {
   Alert,
@@ -100,14 +101,12 @@ export default function EmbedPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Embed</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Mint a test token and copy a player snippet for your LMS. Students
-          watch on your domain — not this console.
-        </p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Streaming"
+        title="Embed & test"
+        description="Mint a test token and copy a player snippet for your LMS. Students watch on your domain — not this console."
+      />
 
       {error && <Alert>{error}</Alert>}
 
@@ -170,3 +169,4 @@ export default function EmbedPage() {
     </div>
   );
 }
+

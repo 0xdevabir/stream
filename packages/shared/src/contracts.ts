@@ -64,8 +64,48 @@ export const sessionUserSchema = z.object({
   organizationName: z.string(),
   organizationSlug: z.string(),
   role: z.enum(["OWNER", "ADMIN", "INSTRUCTOR", "STUDENT"]),
+  platformAdmin: z.boolean().default(false),
 });
 export type SessionUser = z.infer<typeof sessionUserSchema>;
+
+export const createTenantAdminSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  maxConcurrentLives: z.number().int().min(1).max(1000).optional(),
+  maxMinutesPerMonth: z.number().int().min(1).max(10_000_000).optional(),
+  consoleEmail: emailSchema.optional(),
+  consolePassword: passwordSchema.optional(),
+});
+export type CreateTenantAdminInput = z.infer<typeof createTenantAdminSchema>;
+
+export const updateTenantAdminSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  maxConcurrentLives: z.number().int().min(1).max(1000).optional(),
+  maxMinutesPerMonth: z.number().int().min(1).max(10_000_000).optional(),
+});
+export type UpdateTenantAdminInput = z.infer<typeof updateTenantAdminSchema>;
+
+export const resetConsolePasswordSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+});
+export type ResetConsolePasswordInput = z.infer<
+  typeof resetConsolePasswordSchema
+>;
+
+export const addConsoleUserSchema = z.object({
+  email: emailSchema,
+  name: z.string().trim().min(1).max(120),
+  password: passwordSchema,
+});
+export type AddConsoleUserInput = z.infer<typeof addConsoleUserSchema>;
+
+export const updateWebhookEndpointSchema = z.object({
+  enabled: z.boolean().optional(),
+  events: z.array(z.string()).min(1).optional(),
+});
+export type UpdateWebhookEndpointInput = z.infer<
+  typeof updateWebhookEndpointSchema
+>;
 
 // ── Streams ────────────────────────────────────────────────────────────────
 
@@ -348,4 +388,5 @@ export const usageSummarySchema = z.object({
   maxMinutesPerMonth: z.number(),
 });
 export type UsageSummary = z.infer<typeof usageSummarySchema>;
+
 

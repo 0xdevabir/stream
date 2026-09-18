@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { PageHeader, Panel } from "@/components/console/layout";
 import {
   Alert,
   Button,
@@ -94,27 +95,33 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">API keys</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Server-side keys for <code className="text-ink-300">/v1/provider/*</code>.
-          Never put these in a browser.
-        </p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Access"
+        title="API keys"
+        description={
+          <>
+            Server-side keys for{" "}
+            <code className="text-ink-300">/v1/provider/*</code>. Never put
+            these in a browser.
+          </>
+        }
+      />
 
       {error && <Alert>{error}</Alert>}
 
       {createdRaw && (
         <Alert>
-          <p className="mb-2 font-medium">Copy this key now — it will not be shown again.</p>
+          <p className="mb-2 font-medium">
+            Copy this key now — it will not be shown again.
+          </p>
           <CopyField label="API key" value={createdRaw} />
         </Alert>
       )}
 
       <form
         onSubmit={create}
-        className="border-ink-800 bg-ink-900/30 flex flex-wrap items-end gap-3 rounded-xl border p-4"
+        className="border-ink-800/80 from-ink-900/60 to-ink-950/40 flex flex-wrap items-end gap-3 rounded-xl border bg-gradient-to-b p-4"
       >
         <div className="min-w-[16rem] flex-1">
           <Field label="Name">
@@ -129,27 +136,29 @@ export default function ApiKeysPage() {
       {items.length === 0 ? (
         <EmptyState title="No API keys" body="Create a key for your LMS backend." />
       ) : (
-        <div className="border-ink-800 overflow-hidden rounded-xl border">
+        <Panel>
           <table className="w-full text-left text-sm">
-            <thead className="bg-ink-900/60 text-ink-500 text-xs uppercase">
+            <thead className="bg-ink-900/50 text-ink-500 text-[10px] tracking-[0.08em] uppercase">
               <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Prefix</th>
-                <th className="px-4 py-2 font-medium">Last used</th>
-                <th className="px-4 py-2 font-medium" />
+                <th className="px-4 py-2.5 font-semibold">Name</th>
+                <th className="px-4 py-2.5 font-semibold">Prefix</th>
+                <th className="px-4 py-2.5 font-semibold">Last used</th>
+                <th className="px-4 py-2.5 font-semibold" />
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-ink-800 border-t">
+                <tr key={item.id} className="border-ink-800/80 border-t">
                   <td className="px-4 py-3">
                     {item.name}
                     {item.revokedAt && (
                       <span className="text-live-500 ml-2 text-xs">revoked</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs">{item.keyPrefix}…</td>
-                  <td className="text-ink-500 px-4 py-3">
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {item.keyPrefix}…
+                  </td>
+                  <td className="text-ink-500 px-4 py-3 text-xs">
                     {item.lastUsedAt
                       ? new Date(item.lastUsedAt).toLocaleString()
                       : "—"}
@@ -170,8 +179,9 @@ export default function ApiKeysPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Panel>
       )}
     </div>
   );
 }
+

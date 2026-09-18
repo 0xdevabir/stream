@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  PageHeader,
+  StatCard,
+} from "@/components/console/layout";
 import { Alert, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 
@@ -46,13 +50,12 @@ export default function UsagePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Usage</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Metering for the current UTC month. Billing UI is not included in v1.
-        </p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Access"
+        title="Usage"
+        description="Metering for the current UTC month. Quotas are set by the platform admin."
+      />
 
       {error && <Alert>{error}</Alert>}
 
@@ -68,12 +71,10 @@ export default function UsagePage() {
             value={Math.round(usage.liveMinutes)}
             max={usage.maxMinutesPerMonth}
           />
-          <div className="border-ink-800 bg-ink-900/40 rounded-xl border px-4 py-3 sm:col-span-2">
-            <p className="text-ink-500 text-xs tracking-wide uppercase">
-              Playback tokens issued
-            </p>
-            <p className="mt-1 font-mono text-2xl">{usage.tokensIssued}</p>
-          </div>
+          <StatCard
+            label="Playback tokens issued"
+            value={String(usage.tokensIssued)}
+          />
         </div>
       )}
     </div>
@@ -91,9 +92,11 @@ function Meter({
 }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
-    <div className="border-ink-800 bg-ink-900/40 rounded-xl border px-4 py-3">
-      <p className="text-ink-500 text-xs tracking-wide uppercase">{label}</p>
-      <p className="mt-1 font-mono text-2xl">
+    <div className="border-ink-800/80 from-ink-900/80 to-ink-950/40 rounded-xl border bg-gradient-to-b px-4 py-3.5">
+      <p className="text-ink-500 text-[10px] font-semibold tracking-[0.1em] uppercase">
+        {label}
+      </p>
+      <p className="mt-1.5 font-mono text-xl font-semibold tabular-nums">
         {value} <span className="text-ink-500 text-base">/ {max}</span>
       </p>
       <div className="bg-ink-800 mt-3 h-1.5 overflow-hidden rounded-full">

@@ -4,6 +4,7 @@ import type { LiveInput } from "@stream/shared";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { PageHeader, Panel } from "@/components/console/layout";
 import { StatusPill } from "@/components/StatusPill";
 import { Alert, Button, EmptyState, Field, Input, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -11,6 +12,7 @@ import { api, errorMessage } from "@/lib/api";
 export default function LiveInputsPage() {
   const [items, setItems] = useState<LiveInput[]>([]);
   const [name, setName] = useState("");
+  const [record, setRecord] = useState(true);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export default function LiveInputsPage() {
     try {
       const created = await api.post<LiveInput>("/v1/console/live_inputs", {
         name: name.trim() || "Untitled live input",
-        record: true,
+        record,
       });
       setName("");
       window.location.href = `/live-inputs/${created.id}`;
@@ -63,20 +65,18 @@ export default function LiveInputsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Live inputs</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Create an ingest endpoint, publish with OBS or WHIP, then mint playback
-          tokens for your LMS.
-        </p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Streaming"
+        title="Live inputs"
+        description="Create an ingest endpoint, publish with OBS or WHIP, then mint playback tokens for your LMS."
+      />
 
       {error && <Alert>{error}</Alert>}
 
       <form
         onSubmit={create}
-        className="border-ink-800 bg-ink-900/30 flex flex-wrap items-end gap-3 rounded-xl border p-4"
+        className="border-ink-800/80 from-ink-900/60 to-ink-950/40 flex flex-wrap items-end gap-3 rounded-xl border bg-gradient-to-b p-4"
       >
         <div className="min-w-[16rem] flex-1">
           <Field label="Name">
@@ -87,6 +87,14 @@ export default function LiveInputsPage() {
             />
           </Field>
         </div>
+        <label className="text-ink-300 mb-2 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={record}
+            onChange={(e) => setRecord(e.target.checked)}
+          />
+          Record
+        </label>
         <Button type="submit" loading={creating}>
           Create
         </Button>
@@ -98,23 +106,26 @@ export default function LiveInputsPage() {
           body="Create one to get RTMP / SRT / WHIP credentials."
         />
       ) : (
-        <div className="border-ink-800 overflow-hidden rounded-xl border">
+        <Panel>
           <table className="w-full text-left text-sm">
-            <thead className="bg-ink-900/60 text-ink-500 text-xs uppercase">
+            <thead className="bg-ink-900/50 text-ink-500 text-[10px] tracking-[0.08em] uppercase">
               <tr>
-                <th className="px-4 py-2 font-medium">Name</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Record</th>
-                <th className="px-4 py-2 font-medium">Created</th>
+                <th className="px-4 py-2.5 font-semibold">Name</th>
+                <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 font-semibold">Record</th>
+                <th className="px-4 py-2.5 font-semibold">Created</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-ink-800 border-t">
+                <tr
+                  key={item.id}
+                  className="border-ink-800/80 hover:bg-ink-900/30 border-t transition-colors"
+                >
                   <td className="px-4 py-3">
                     <Link
                       href={`/live-inputs/${item.id}`}
-                      className="hover:underline"
+                      className="font-medium hover:underline"
                     >
                       {item.name}
                     </Link>
@@ -122,18 +133,19 @@ export default function LiveInputsPage() {
                   <td className="px-4 py-3">
                     <StatusPill status={item.status} />
                   </td>
-                  <td className="text-ink-500 px-4 py-3">
+                  <td className="text-ink-500 px-4 py-3 text-xs">
                     {item.record ? "yes" : "no"}
                   </td>
-                  <td className="text-ink-500 px-4 py-3">
+                  <td className="text-ink-500 px-4 py-3 text-xs">
                     {new Date(item.createdAt).toLocaleString()}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </Panel>
       )}
     </div>
   );
 }
+

@@ -4,21 +4,23 @@ Self-hosted **live + VOD streaming provider** (Cloudflare Stream–style): tenan
 create live inputs via API or the developer console, publish with OBS/RTMP/SRT/WHIP,
 and deliver AES-128 HLS through nginx + CDN with signed playback tokens.
 
-End viewers watch inside your LMS or app — not on this site. The web UI is a
-**tenant developer console**.
+End viewers watch inside your LMS or app — not on this site. The web UI has a
+**super-admin panel** (all tenants) and a **tenant / consumer console** (one
+customer’s live inputs, keys, and embed tools).
 
 ```bash
 pnpm setup && pnpm up && pnpm db:seed
-open http://localhost:8080          # console@example.com / changeme-please
+open http://localhost:8080          # admin@example.com or console@example.com / changeme-please
 ```
 
 ## What it does
 
 - **Provider API** — `/v1/provider/*` with API keys for LMS integrations (live
   inputs, tokens, videos, webhooks, usage).
-- **Developer console** — cookie-auth `/v1/console/*` for the same operations
-  in the browser: overview, live inputs, videos, API keys, webhooks, usage,
-  embed/test player.
+- **Super admin** — `/admin` + `/v1/admin/*` to create tenants and set quotas.
+- **Tenant / consumer console** — `/dashboard` + `/v1/console/*` for live
+  inputs, videos, API keys, webhooks, usage, embed/test player.
+- **Integration guide** — `/guides/integration` and `docs/integration.md`.
 - **Adaptive quality** — GOP-aligned 1080p/720p/480p/360p ladder from one ffmpeg
   process; never upscales a lower-resolution source.
 - **Low latency** — ~3s glass-to-glass HLS, or sub-second WebRTC (`ULTRA`).
@@ -33,7 +35,7 @@ open http://localhost:8080          # console@example.com / changeme-please
 ```
 apps/api          Fastify: provider + console APIs, auth, keys, hooks
 apps/transcoder   ffmpeg supervisor + recording/VOD worker
-apps/web          Next.js: tenant developer console
+apps/web          Next.js: super-admin + tenant console + integration guide
 packages/db       Prisma schema, envelope encryption, seed
 packages/shared   zod contracts, ladder, canonical media paths
 infra/            compose, mediamtx.yml, nginx, CDN worker, Dockerfiles
@@ -42,12 +44,14 @@ scripts/          smoke publisher, verifier, create-tenant, load-test
 
 ## Console quick start
 
-1. Seed → sign in as `console@example.com` / `changeme-please`.
-2. Create a **live input**, copy RTMP/SRT/WHIP ingest credentials.
-3. Publish from OBS; mint a playback token; preview on the input page or `/embed`.
-4. Create an **API key** and call `/v1/provider/*` from your LMS.
+1. Seed → sign in:
+   - **Super admin:** `admin@example.com` / `changeme-please` → `/admin`
+   - **Tenant console:** `console@example.com` / `changeme-please` → `/dashboard`
+2. (Admin) Create tenants and set quotas; (Tenant) create a live input, copy ingest, mint a token.
+3. Create an **API key** and call `/v1/provider/*` from your LMS.
+4. Read the [integration guide](/guides/integration) (also `docs/integration.md`).
 
-Self-serve signup is disabled; tenants are created by an operator (seed or
+Self-serve signup is disabled; tenants are created by a platform admin (or
 `scripts/create-tenant.ts`).
 
 ## Verifying it works
@@ -64,9 +68,11 @@ pnpm test && pnpm typecheck
 - [Deploying and operating](docs/deploy.md) — single-box guide, tuning, sizing
 - [Security model](docs/security.md) — including what is *not* protected
 - [Streaming provider](docs/provider.md) — multi-tenant live+VOD API
+- [Developer integration](docs/integration.md) — LMS wiring (also `/guides/integration`)
 - [Embed / LMS](docs/embed.md) — signed playback tokens for third-party players
 
 ## Not included
 
 Billing UI, multi-region edge federation, DRM, native mobile apps, DVR scrubbing
 during live, simulcast to social networks.
+

@@ -2,6 +2,7 @@ import {
   createLiveInputSchema,
   createPlaybackTokenSchema,
   createWebhookEndpointSchema,
+  updateWebhookEndpointSchema,
 } from "@stream/shared";
 import { generateApiKey, prisma } from "@stream/db";
 import { randomBytes } from "node:crypto";
@@ -207,6 +208,44 @@ export async function consoleRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  app.patch("/webhooks/:id", async (request) => {
+    const ctx = request.consoleTenant!;
+    const { id } = validate.params(idParam, request);
+    const input = validate.body(updateWebhookEndpointSchema, request);
+    const existing = await prisma.webhookEndpoint.findFirst({
+      where: { id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw ApiError.notFound("Webhook endpoint not found");
+
+    const endpoint = await prisma.webhookEndpoint.update({
+      where: { id },
+      data: {
+        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        ...(input.events !== undefined ? { events: [...input.events] } : {}),
+      },
+    });
+
+    return {
+      id: endpoint.id,
+      url: endpoint.url,
+      events: endpoint.events,
+      enabled: endpoint.enabled,
+      createdAt: endpoint.createdAt.toISOString(),
+    };
+  });
+
+  app.delete("/webhooks/:id", async (request, reply) => {
+    const ctx = request.consoleTenant!;
+    const { id } = validate.params(idParam, request);
+    const existing = await prisma.webhookEndpoint.findFirst({
+      where: { id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw ApiError.notFound("Webhook endpoint not found");
+
+    await prisma.webhookEndpoint.delete({ where: { id } });
+    return reply.code(204).send();
+  });
+
   app.get("/usage", async (request) => {
     const ctx = request.consoleTenant!;
     const summary = await usage.summarizeUsage(ctx.tenantId, startOfMonth());
@@ -227,3 +266,4 @@ function startOfMonth(): Date {
   monthStart.setUTCHours(0, 0, 0, 0);
   return monthStart;
 }
+

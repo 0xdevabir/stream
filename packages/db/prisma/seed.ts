@@ -57,6 +57,19 @@ async function main() {
   }
 
   const passwordHash = await hashPassword(DEV_PASSWORD);
+
+  // Platform super-admin (no tenant required).
+  await prisma.user.upsert({
+    where: { email: "admin@example.com" },
+    update: { name: "Platform Admin", passwordHash, platformAdmin: true },
+    create: {
+      email: "admin@example.com",
+      name: "Platform Admin",
+      passwordHash,
+      platformAdmin: true,
+    },
+  });
+
   const providerSlug = "demo-provider";
   const providerEmail = `provider+${providerSlug}@stream.local`;
 
@@ -205,6 +218,7 @@ async function main() {
   const output = {
     generatedAt: new Date().toISOString(),
     logins: {
+      admin: { email: "admin@example.com", password: DEV_PASSWORD },
       console: { email: "console@example.com", password: DEV_PASSWORD },
     },
     smokeStream: {
@@ -229,7 +243,8 @@ async function main() {
   );
 
   console.log("Seeded Stream provider demo");
-  console.log(`  console     console@example.com / ${DEV_PASSWORD}`);
+  console.log(`  admin       admin@example.com / ${DEV_PASSWORD}  (super-admin)`);
+  console.log(`  console     console@example.com / ${DEV_PASSWORD}  (tenant)`);
   console.log(`  smoke input ${smoke.stream.slug}  (key ${smoke.streamKey})`);
   console.log(`  provider    tenant=${tenant.slug}  apiKey=${apiKey.raw}`);
   console.log("  credentials written to .seed-output.json");
@@ -243,3 +258,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

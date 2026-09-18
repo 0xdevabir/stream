@@ -168,14 +168,16 @@ model UsageEvent {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  name         String
-  avatarUrl    String?
-  lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  avatarUrl     String?
+  /// Platform operator — can use /v1/admin and the super-admin UI.
+  platformAdmin Boolean   @default(false)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   memberships       Membership[]
   instructedStreams Stream[]           @relation("StreamInstructor")
@@ -452,4 +454,5 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([action, createdAt])
 }
+
 

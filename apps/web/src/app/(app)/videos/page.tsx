@@ -4,6 +4,7 @@ import type { ProviderVideo } from "@stream/shared";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { PageHeader, Panel } from "@/components/console/layout";
 import { StatusPill } from "@/components/StatusPill";
 import { Alert, EmptyState, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -44,13 +45,12 @@ export default function VideosPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Videos</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Recordings produced from live inputs (no re-encode).
-        </p>
-      </div>
+    <div className="space-y-7">
+      <PageHeader
+        eyebrow="Streaming"
+        title="Videos"
+        description="Recordings produced from live inputs (no re-encode)."
+      />
 
       {error && <Alert>{error}</Alert>}
 
@@ -60,19 +60,22 @@ export default function VideosPage() {
           body="When a recorded live input ends, the VOD appears here."
         />
       ) : (
-        <div className="border-ink-800 overflow-hidden rounded-xl border">
+        <Panel>
           <table className="w-full text-left text-sm">
-            <thead className="bg-ink-900/60 text-ink-500 text-xs uppercase">
+            <thead className="bg-ink-900/50 text-ink-500 text-[10px] tracking-[0.08em] uppercase">
               <tr>
-                <th className="px-4 py-2 font-medium">Video</th>
-                <th className="px-4 py-2 font-medium">Live input</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Duration</th>
+                <th className="px-4 py-2.5 font-semibold">Video</th>
+                <th className="px-4 py-2.5 font-semibold">Live input</th>
+                <th className="px-4 py-2.5 font-semibold">Status</th>
+                <th className="px-4 py-2.5 font-semibold">Duration</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-ink-800 border-t">
+                <tr
+                  key={item.id}
+                  className="border-ink-800/80 hover:bg-ink-900/30 border-t"
+                >
                   <td className="px-4 py-3 font-mono text-xs">
                     <Link
                       href={`/videos/${item.id}`}
@@ -101,8 +104,9 @@ export default function VideosPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Panel>
       )}
     </div>
   );
 }
+

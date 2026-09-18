@@ -8,6 +8,7 @@ import { env } from "./env";
 import { registerErrorHandler } from "./errors";
 import { redis } from "./redis";
 import { authRoutes } from "./routes/auth";
+import { adminRoutes } from "./routes/admin";
 import { consoleRoutes } from "./routes/console";
 import { healthRoutes } from "./routes/health";
 import { internalRoutes } from "./routes/internal";
@@ -61,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       scope.addHook("preHandler", verifyCsrf);
 
       await scope.register(authRoutes, { prefix: "/auth" });
+      await scope.register(adminRoutes, { prefix: "/admin" });
       await scope.register(consoleRoutes, { prefix: "/console" });
       await scope.register(providerRoutes, { prefix: "/provider" });
       // Same-origin playback cookie grants (optional; LMS uses signed tokens).
@@ -72,3 +74,4 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   return app;
 }
+

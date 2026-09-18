@@ -32,28 +32,42 @@ const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");
 
 async function buildSession(userId: string): Promise<SessionUser> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      avatarUrl: true,
+      platformAdmin: true,
+    },
+  });
+  if (!user) {
+    throw ApiError.unauthorized("Account not found");
+  }
+
   const membership = await prisma.membership.findFirst({
     where: { userId },
     orderBy: { createdAt: "asc" },
     include: {
-      user: { select: { id: true, email: true, name: true, avatarUrl: true } },
       organization: { select: { id: true, name: true, slug: true } },
     },
   });
 
-  if (!membership) {
+  if (!membership && !user.platformAdmin) {
     throw ApiError.forbidden("This account is not a member of any organization");
   }
 
   return {
-    id: membership.user.id,
-    email: membership.user.email,
-    name: membership.user.name,
-    avatarUrl: membership.user.avatarUrl,
-    organizationId: membership.organization.id,
-    organizationName: membership.organization.name,
-    organizationSlug: membership.organization.slug,
-    role: membership.role,
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    organizationId: membership?.organization.id ?? "platform",
+    organizationName: membership?.organization.name ?? "Platform",
+    organizationSlug: membership?.organization.slug ?? "platform",
+    role: membership?.role ?? "OWNER",
+    platformAdmin: user.platformAdmin,
   };
 }
 
@@ -168,5 +182,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { user: await buildSession(auth.userId) };
   });
 }
+
 
 

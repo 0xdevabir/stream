@@ -6,14 +6,18 @@ import { useEffect } from "react";
 import { Spinner } from "@/components/ui";
 import { useSession } from "@/lib/session";
 
-/** Console entry: signed-in users land on the dashboard. */
+/** Entry: platform admins → /admin; tenants → /dashboard; else → /login */
 export default function IndexPage() {
   const router = useRouter();
   const { user, loading } = useSession();
 
   useEffect(() => {
     if (loading) return;
-    router.replace(user ? "/dashboard" : "/login");
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    router.replace(user.platformAdmin ? "/admin" : "/dashboard");
   }, [loading, user, router]);
 
   return (
