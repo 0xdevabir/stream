@@ -10,6 +10,7 @@
  * root (gitignored) for the smoke scripts to read.
  */
 import { writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 
 import { PrismaClient } from "@prisma/client";
@@ -20,6 +21,7 @@ import {
   wrapSecret,
 } from "../src/content-key";
 import {
+  generateApiKey,
   generateContentKeyId,
   generateShareToken,
   generateStreamKey,
@@ -195,6 +197,55 @@ async function main() {
     slug: "lecture-8-dynamic-linking",
   });
 
+  // Provider demo tenant + API key for LMS / embed integrations.
+  const providerSlug = "demo-provider";
+  const providerEmail = `provider+${providerSlug}@stream.local`;
+  const providerUser = await prisma.user.upsert({
+    where: { email: providerEmail },
+    update: {},
+    create: {
+      email: providerEmail,
+      name: "Demo Provider (API)",
+      passwordHash: await hashPassword(randomBytes(24).toString("hex")),
+    },
+  });
+
+  const providerOrg = await prisma.organization.upsert({
+    where: { slug: `tenant-${providerSlug}` },
+    update: {},
+    create: {
+      name: "Demo Provider",
+      slug: `tenant-${providerSlug}`,
+      memberships: {
+        create: { userId: providerUser.id, role: "OWNER" },
+      },
+    },
+  });
+
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: providerSlug },
+    update: {},
+    create: {
+      name: "Demo Provider",
+      slug: providerSlug,
+      organizationId: providerOrg.id,
+      serviceUserId: providerUser.id,
+      maxConcurrentLives: 5,
+      maxMinutesPerMonth: 50_000,
+    },
+  });
+
+  await prisma.apiKey.deleteMany({ where: { tenantId: tenant.id } });
+  const apiKey = generateApiKey();
+  await prisma.apiKey.create({
+    data: {
+      tenantId: tenant.id,
+      name: "Seed key",
+      keyPrefix: apiKey.prefix,
+      keyHash: apiKey.hash,
+    },
+  });
+
   const output = {
     generatedAt: new Date().toISOString(),
     organization: { id: org.id, slug: org.slug },
@@ -209,6 +260,12 @@ async function main() {
       contentKeyId: smoke.stream.contentKeyId,
     },
     upcomingStream: { id: tomorrow.stream.id, slug: tomorrow.stream.slug },
+    provider: {
+      tenantId: tenant.id,
+      slug: tenant.slug,
+      apiKey: apiKey.raw,
+      apiBase: "/v1/provider",
+    },
   };
 
   writeFileSync(
@@ -220,6 +277,7 @@ async function main() {
   console.log(`  instructor  instructor@example.com / ${DEV_PASSWORD}`);
   console.log(`  students    student1..3@example.com / ${DEV_PASSWORD}`);
   console.log(`  smoke class ${smoke.stream.slug}  (key ${smoke.streamKey})`);
+  console.log(`  provider    tenant=${tenant.slug}  apiKey=${apiKey.raw}`);
   console.log("  credentials written to .seed-output.json");
 }
 
@@ -231,3 +289,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

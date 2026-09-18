@@ -92,10 +92,11 @@ export interface PlaybackClaims {
 }
 
 export async function signPlaybackToken(
-  claims: Omit<PlaybackClaims, "jti"> & { jti?: string },
+  claims: Omit<PlaybackClaims, "jti"> & { jti?: string; ttlSeconds?: number },
 ): Promise<{ token: string; jti: string; expiresAt: Date }> {
   const jti = claims.jti ?? randomBytes(16).toString("base64url");
-  const expiresAt = new Date(Date.now() + env.PLAYBACK_TOKEN_TTL * 1000);
+  const ttl = claims.ttlSeconds ?? env.PLAYBACK_TOKEN_TTL;
+  const expiresAt = new Date(Date.now() + ttl * 1000);
 
   const builder = new SignJWT({
     sid: claims.streamId,
@@ -107,7 +108,7 @@ export async function signPlaybackToken(
     .setAudience("playback")
     .setJti(jti)
     .setIssuedAt()
-    .setExpirationTime(`${env.PLAYBACK_TOKEN_TTL}s`);
+    .setExpirationTime(`${ttl}s`);
 
   if (claims.userId) builder.setSubject(claims.userId);
 
@@ -185,3 +186,4 @@ export async function verifyPublishToken(
     return null;
   }
 }
+

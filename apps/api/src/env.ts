@@ -40,6 +40,15 @@ const schema = z.object({
   PUBLISH_TOKEN_TTL: z.coerce.number().int().min(30).default(300),
   MAX_CONCURRENT_SESSIONS_PER_USER: z.coerce.number().int().min(1).default(3),
 
+  /**
+   * Optional CDN origin for signed playback URLs. Defaults to PUBLIC_BASE_URL
+   * when unset (local / single-origin deploys). Empty string is treated as unset.
+   */
+  CDN_PUBLIC_BASE_URL: z.preprocess(
+    (value) => (value === "" || value === undefined || value === null ? undefined : value),
+    z.string().url().optional(),
+  ),
+
   // ── Media plane ──
   MEDIAMTX_HOST: z.string().default("mediamtx"),
   MEDIAMTX_API_PORT: z.coerce.number().int().default(9997),
@@ -106,3 +115,4 @@ function load() {
 
 export const env = load();
 export type Env = typeof env;
+

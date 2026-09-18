@@ -5,7 +5,7 @@ import { hashStreamKey, prisma } from "@stream/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import { COOKIE } from "../auth/cookies";
+import { extractPlaybackToken } from "../auth/playback-token";
 import { verifyPlaybackToken, verifyPublishToken } from "../auth/tokens";
 import { env } from "../env";
 import { ApiError } from "../errors";
@@ -14,6 +14,8 @@ import * as events from "../services/events";
 import { isPlaybackSessionActive } from "../services/playback";
 import * as presence from "../services/presence";
 import * as streams from "../services/streams";
+import * as usage from "../services/usage";
+import { dispatchWebhook } from "../services/webhooks";
 import * as validate from "../validate";
 
 /**
@@ -176,7 +178,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const [kind, resourceId] = scope.split(":", 2);
     if (!kind || !resourceId) return reply.code(403).send();
 
-    const token = request.cookies[COOKIE.playback];
+    const token = extractPlaybackToken(request);
     if (!token) return reply.code(401).send();
 
     const claims = await verifyPlaybackToken(token);
@@ -269,6 +271,22 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         status: "LIVE",
         hlsUrl: urls.hlsUrl,
       });
+
+      if (stream.tenantId) {
+        await usage.recordUsage({
+          tenantId: stream.tenantId,
+          streamId: stream.id,
+          kind: "LIVE_MINUTE",
+          quantity: 0,
+          metadata: { event: "live.started" },
+        });
+        void dispatchWebhook(stream.tenantId, "live.started", {
+          liveInputId: stream.id,
+          hlsUrl: urls.hlsUrl
+            ? new URL(urls.hlsUrl, env.PUBLIC_BASE_URL).toString()
+            : null,
+        });
+      }
     }
 
     return reply.code(204).send();
@@ -281,7 +299,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
 
     const stream = await prisma.stream.findUnique({
       where: { id },
-      select: { recordEnabled: true },
+      select: { recordEnabled: true, tenantId: true, startedAt: true },
     });
     if (!stream) throw ApiError.notFound("Unknown stream");
 
@@ -291,6 +309,22 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       status: stream.recordEnabled ? "PROCESSING" : "ENDED",
       hlsUrl: null,
     });
+
+    if (stream.tenantId) {
+      const minutes = stream.startedAt
+        ? Math.max(1, Math.ceil((Date.now() - stream.startedAt.getTime()) / 60_000))
+        : 1;
+      await usage.recordUsage({
+        tenantId: stream.tenantId,
+        streamId: id,
+        kind: "LIVE_MINUTE",
+        quantity: minutes,
+      });
+      void dispatchWebhook(stream.tenantId, "live.ended", {
+        liveInputId: id,
+        durationMinutes: minutes,
+      });
+    }
 
     return reply.code(204).send();
   });
@@ -353,7 +387,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         error: input.error ?? null,
         readyAt: input.status === "READY" ? new Date() : null,
       },
-      select: { id: true, streamId: true },
+      select: { id: true, streamId: true, status: true },
     });
 
     // The class is only truly over once its replay exists (or has failed).
@@ -363,6 +397,20 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       status: "ENDED",
       hlsUrl: null,
     });
+
+    const owner = await prisma.stream.findUnique({
+      where: { id: recording.streamId },
+      select: { tenantId: true },
+    });
+    if (owner?.tenantId) {
+      const eventType = input.status === "READY" ? "video.ready" : "video.failed";
+      void dispatchWebhook(owner.tenantId, eventType, {
+        videoId: recording.id,
+        liveInputId: recording.streamId,
+        status: recording.status,
+        error: input.error ?? null,
+      });
+    }
 
     return reply.code(204).send();
   });

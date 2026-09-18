@@ -24,7 +24,8 @@
     "logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
     "ps": "docker compose --env-file .env -f infra/docker-compose.yml ps",
     "smoke:stream": "node scripts/smoke-stream.mjs",
-    "smoke:verify": "node scripts/smoke-verify.mjs"
+    "smoke:verify": "node scripts/smoke-verify.mjs",
+    "loadtest:hls": "node scripts/load-test-hls.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
@@ -32,3 +33,4 @@
     "typescript": "^5.9.2"
   }
 }
+

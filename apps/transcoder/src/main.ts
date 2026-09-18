@@ -1,5 +1,13 @@
+import { hostname } from "node:os";
+
 import * as api from "./api";
 import { env } from "./env";
+import {
+  closeLeaseRedis,
+  releaseLease,
+  renewLease,
+  tryAcquireLease,
+} from "./lease";
 import { logger } from "./logger";
 import { listLiveStreams } from "./mediamtx";
 import { StreamSession } from "./session";
@@ -11,10 +19,8 @@ import { StreamSession } from "./session";
  * reconciles that against the sessions it is running: start one for a class
  * that appeared, stop one for a class that went away.
  *
- * Reconciliation rather than event handling is a deliberate choice. It is
- * level-triggered, so a transcoder that crashes mid-class picks the class back
- * up on its next tick instead of leaving it permanently unencoded, and there
- * is no event queue to get out of sync with reality.
+ * When REDIS_URL is set, encode leases ensure only one worker in a pool owns
+ * each live input.
  */
 
 const sessions = new Map<string, StreamSession>();
@@ -23,13 +29,14 @@ const missingSince = new Map<string, number>();
 /** Classes we tried and failed to start, so we do not thrash on them. */
 const backoffUntil = new Map<string, number>();
 
+const workerId = env.workerId;
+const leasesEnabled = Boolean(env.REDIS_URL);
+
 let running = true;
 
 async function tick(): Promise<void> {
   const live = await listLiveStreams();
 
-  // null means MediaMTX is unreachable, not that every class ended. Tearing
-  // down running sessions here would kill live classes over a blip.
   if (live === null) return;
 
   const liveIds = new Set(live.map((path) => path.streamId));
@@ -38,11 +45,34 @@ async function tick(): Promise<void> {
   for (const path of live) {
     if (sessions.has(path.streamId)) {
       missingSince.delete(path.streamId);
+      if (leasesEnabled) {
+        const ok = await renewLease(path.streamId, workerId);
+        if (!ok) {
+          logger.warn(
+            { streamId: path.streamId },
+            "lost encode lease; stopping local session",
+          );
+          const session = sessions.get(path.streamId);
+          sessions.delete(path.streamId);
+          if (session) void session.stop();
+        }
+      }
       continue;
     }
 
     const backoff = backoffUntil.get(path.streamId);
     if (backoff && now < backoff) continue;
+
+    if (leasesEnabled) {
+      const acquired = await tryAcquireLease(path.streamId, workerId);
+      if (!acquired) {
+        logger.debug(
+          { streamId: path.streamId },
+          "another worker holds the encode lease",
+        );
+        continue;
+      }
+    }
 
     const session = new StreamSession(path.streamId);
     sessions.set(path.streamId, session);
@@ -51,11 +81,14 @@ async function tick(): Promise<void> {
       const started = await session.start();
       if (!started) {
         sessions.delete(path.streamId);
-        // Usually a publisher for a class that does not exist, or a source
-        // that is not yet producing frames.
+        if (leasesEnabled) await releaseLease(path.streamId, workerId);
         backoffUntil.set(path.streamId, Date.now() + 5_000);
       } else {
         backoffUntil.delete(path.streamId);
+        logger.info(
+          { streamId: path.streamId, workerId },
+          "encode session started",
+        );
       }
     } catch (error) {
       logger.error(
@@ -66,6 +99,7 @@ async function tick(): Promise<void> {
         "failed to start session",
       );
       sessions.delete(path.streamId);
+      if (leasesEnabled) await releaseLease(path.streamId, workerId);
       backoffUntil.set(path.streamId, Date.now() + 15_000);
     }
   }
@@ -73,8 +107,6 @@ async function tick(): Promise<void> {
   for (const [streamId, session] of sessions) {
     if (liveIds.has(streamId)) continue;
 
-    // An encoder that drops for a few seconds (a laptop changing networks,
-    // OBS reconnecting) should not end the class and trigger a recording.
     const since = missingSince.get(streamId);
     if (since === undefined) {
       missingSince.set(streamId, now);
@@ -87,17 +119,20 @@ async function tick(): Promise<void> {
     missingSince.delete(streamId);
     sessions.delete(streamId);
 
-    // Finalizing uploads a whole class and can take a while; it must not
-    // block the next reconciliation tick.
-    void session.stop().catch((error) => {
-      logger.error(
-        {
-          streamId,
-          err: error instanceof Error ? error.message : String(error),
-        },
-        "failed to stop session cleanly",
-      );
-    });
+    void session
+      .stop()
+      .catch((error) => {
+        logger.error(
+          {
+            streamId,
+            err: error instanceof Error ? error.message : String(error),
+          },
+          "failed to stop session cleanly",
+        );
+      })
+      .finally(() => {
+        if (leasesEnabled) void releaseLease(streamId, workerId);
+      });
   }
 }
 
@@ -115,6 +150,9 @@ async function main(): Promise<void> {
       ladder: env.LADDER,
       encoder: env.VIDEO_ENCODER,
       segmentSeconds: env.HLS_SEGMENT_SECONDS,
+      workerId,
+      leases: leasesEnabled,
+      host: hostname(),
     },
     "transcoder started",
   );
@@ -125,10 +163,13 @@ async function main(): Promise<void> {
 
     logger.info({ signal, sessions: sessions.size }, "shutting down");
 
-    // Stop every class properly so in-progress recordings still get published.
     await Promise.allSettled(
-      [...sessions.values()].map((session) => session.stop()),
+      [...sessions.entries()].map(async ([streamId, session]) => {
+        await session.stop();
+        if (leasesEnabled) await releaseLease(streamId, workerId);
+      }),
     );
+    await closeLeaseRedis();
     process.exit(0);
   };
 

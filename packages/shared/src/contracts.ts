@@ -252,3 +252,100 @@ export const apiErrorSchema = z.object({
   }),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;
+
+// ── Provider API (multi-tenant live + VOD) ─────────────────────────────────
+
+export const PROVIDER_WEBHOOK_EVENTS = [
+  "live.started",
+  "live.ended",
+  "video.ready",
+  "video.failed",
+] as const;
+export type ProviderWebhookEvent = (typeof PROVIDER_WEBHOOK_EVENTS)[number];
+
+export const createLiveInputSchema = z.object({
+  name: titleSchema,
+  record: z.boolean().default(true),
+  /** Provider inputs default to token-gated PUBLIC media; access is the signed JWT. */
+  metadata: z.record(z.string()).optional(),
+});
+export type CreateLiveInput = z.infer<typeof createLiveInputSchema>;
+
+export const liveInputSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.enum(["SCHEDULED", "LIVE", "PROCESSING", "ENDED", "CANCELLED"]),
+  record: z.boolean(),
+  createdAt: z.string(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+  ingest: z.object({
+    rtmp: z.object({ url: z.string(), streamKey: z.string() }),
+    srt: z.object({ url: z.string() }),
+    whip: z.object({ url: z.string() }),
+  }),
+  playback: z.object({
+    hlsUrl: z.string().nullable(),
+    vodUrl: z.string().nullable(),
+  }),
+  recordingId: z.string().nullable(),
+});
+export type LiveInput = z.infer<typeof liveInputSchema>;
+
+export const createPlaybackTokenSchema = z.object({
+  /** Seconds until the token expires (capped server-side). */
+  ttlSeconds: z.number().int().min(60).max(86_400).optional(),
+});
+export type CreatePlaybackTokenInput = z.infer<typeof createPlaybackTokenSchema>;
+
+export const playbackTokenSchema = z.object({
+  token: z.string(),
+  expiresAt: z.string(),
+  hlsUrl: z.string().nullable(),
+  vodUrl: z.string().nullable(),
+  /** Absolute playback URL with token query param for embeds. */
+  signedHlsUrl: z.string().nullable(),
+  signedVodUrl: z.string().nullable(),
+});
+export type PlaybackTokenResponse = z.infer<typeof playbackTokenSchema>;
+
+export const providerVideoSchema = z.object({
+  id: z.string(),
+  liveInputId: z.string(),
+  status: z.enum(["PENDING", "PROCESSING", "READY", "FAILED"]),
+  durationSeconds: z.number().nullable(),
+  sizeBytes: z.number().nullable(),
+  vodUrl: z.string().nullable(),
+  downloadUrl: z.string().nullable(),
+  createdAt: z.string(),
+  readyAt: z.string().nullable(),
+});
+export type ProviderVideo = z.infer<typeof providerVideoSchema>;
+
+export const createWebhookEndpointSchema = z.object({
+  url: z.string().url(),
+  events: z.array(z.enum(PROVIDER_WEBHOOK_EVENTS)).min(1),
+  secret: z.string().min(16).max(200).optional(),
+});
+export type CreateWebhookEndpointInput = z.infer<typeof createWebhookEndpointSchema>;
+
+export const webhookEndpointSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  events: z.array(z.string()),
+  enabled: z.boolean(),
+  createdAt: z.string(),
+  /** Only returned once at creation. */
+  secret: z.string().optional(),
+});
+export type WebhookEndpoint = z.infer<typeof webhookEndpointSchema>;
+
+export const usageSummarySchema = z.object({
+  liveMinutes: z.number(),
+  tokensIssued: z.number(),
+  concurrentLive: z.number(),
+  maxConcurrentLives: z.number(),
+  maxMinutesPerMonth: z.number(),
+});
+export type UsageSummary = z.infer<typeof usageSummarySchema>;
+

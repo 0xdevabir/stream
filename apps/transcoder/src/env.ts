@@ -40,6 +40,11 @@ const schema = z.object({
   FFMPEG_PATH: z.string().default("ffmpeg"),
   FFPROBE_PATH: z.string().default("ffprobe"),
 
+  /** Required for multi-worker encode leases. */
+  REDIS_URL: z.string().min(1).optional(),
+  /** Stable identity for this worker process (defaults to hostname+pid). */
+  WORKER_ID: z.string().optional(),
+
   S3_ENDPOINT: z.string().min(1),
   S3_REGION: z.string().default("us-east-1"),
   S3_BUCKET: z.string().min(1),
@@ -62,8 +67,13 @@ function load() {
 
   const env = parsed.data;
 
+  const workerId =
+    env.WORKER_ID ??
+    `${process.env.HOSTNAME ?? "transcoder"}-${process.pid}`;
+
   return {
     ...env,
+    workerId,
     mediamtxApiBase: `http://${env.MEDIAMTX_HOST}:${env.MEDIAMTX_API_PORT}`,
     /**
      * RTSP pull URL for a class. The `internal` user plus INTERNAL_TOKEN is
@@ -79,3 +89,4 @@ function load() {
 
 export const env = load();
 export type Env = typeof env;
+

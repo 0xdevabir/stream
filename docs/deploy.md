@@ -78,6 +78,10 @@ during the class and in object storage afterwards.
    recording permanently undecryptable — it is not recoverable from a database
    backup, because that is the point of it.
 
+For running this stack as a **multi-tenant streaming provider** (API keys,
+signed playback, CDN, webhooks), see [provider.md](provider.md) and
+[embed.md](embed.md).
+
 ## Tuning
 
 | Variable | Meaning | Default |
@@ -123,3 +127,4 @@ short relative to class length, raise it.
 **WHEP will not connect.** Almost always `WEBRTC_ADDITIONAL_HOSTS`, or UDP 8189
 blocked. The player falls back to HLS on its own, which is the right behaviour
 on a restricted network.
+

@@ -41,6 +41,21 @@ export function generateContentKeyId(): string {
   return `k_${randomBytes(12).toString("base64url")}`;
 }
 
+/** Provider API key: `sk_live_<secret>`. Only the hash is stored. */
+export function generateApiKey(): { raw: string; prefix: string; hash: string } {
+  const secret = randomBytes(24).toString("base64url");
+  const raw = `sk_live_${secret}`;
+  return {
+    raw,
+    prefix: raw.slice(0, 16),
+    hash: createHash("sha256").update(raw).digest("hex"),
+  };
+}
+
+export function hashApiKey(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
 /** Truncated IP hash: enough to correlate abuse, not enough to identify. */
 export function hashIp(ip: string, salt: string): string {
   return createHash("sha256").update(`${salt}:${ip}`).digest("hex").slice(0, 32);
@@ -58,3 +73,4 @@ export function slugify(title: string): string {
   const suffix = randomBytes(3).toString("hex");
   return base ? `${base}-${suffix}` : suffix;
 }
+

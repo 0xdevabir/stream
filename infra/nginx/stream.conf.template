@@ -18,9 +18,22 @@ resolver 127.0.0.11 ipv6=off valid=10s;
 
 # Authorization decisions are cached so that a 1000-viewer class costs the API
 # a handful of requests per second instead of one per segment per viewer. The
-# cookie is part of the key, so viewers can never share a cached decision.
+# credential is part of the key, so viewers can never share a cached decision.
+# Supports cookie `pt`, query `token`, or Authorization Bearer (via map below).
 proxy_cache_path /var/cache/nginx/authz levels=1:2 keys_zone=authz:16m
                  max_size=64m inactive=120s use_temp_path=off;
+
+map $http_authorization $auth_bearer {
+    default "";
+    "~*^Bearer\\s+(?<tok>.+)$" $tok;
+}
+
+# Query token wins (CDN signed URLs); otherwise fall back to the playback cookie.
+# Bearer tokens are forwarded via Authorization and merged into the cache key.
+map $arg_token $token_or_cookie {
+    default $arg_token;
+    ""      $cookie_pt;
+}
 
 # Collapses a media request down to the thing authorization actually depends
 # on, so every segment of a given stream shares one cache entry.
@@ -63,6 +76,17 @@ server {
         return 200 "ok\n";
     }
 
+    location = /readyz {
+        proxy_pass http://$api_host/readyz;
+        proxy_set_header Host $host;
+    }
+
+    location = /metrics {
+        proxy_pass http://$api_host/metrics;
+        proxy_set_header Host $host;
+        add_header Cache-Control "no-store" always;
+    }
+
     # ── Authorization subrequest ───────────────────────────────────────────
     # 204 allows, 401/403 denies. The API resolves the playback cookie against
     # the stream's access mode; see apps/api/src/routes/internal.ts.
@@ -77,9 +101,14 @@ server {
         proxy_set_header  X-Media-Scope  $media_scope;
         proxy_set_header  X-Real-IP      $remote_addr;
         proxy_set_header  X-Internal-Token "${INTERNAL_TOKEN}";
+        # $playback_cred is set in the parent media location so query `token=`
+        # survives auth_request (subrequests have an empty $args).
+        proxy_set_header  X-Playback-Token $playback_cred;
+        proxy_set_header  Authorization $http_authorization;
+        proxy_set_header  Cookie $http_cookie;
 
         proxy_cache       authz;
-        proxy_cache_key   "$cookie_pt|$media_scope";
+        proxy_cache_key   "$playback_cred|$auth_bearer|$media_scope";
         proxy_cache_valid 204 200 15s;
         proxy_cache_valid 401 403 404 5s;
         # One request fills the cache; the rest wait rather than stampeding.
@@ -90,6 +119,8 @@ server {
     # ── Live HLS ───────────────────────────────────────────────────────────
     # Playlists are rewritten every segment, so they must never be cached.
     location ~ ^/hls/(?<sid>[A-Za-z0-9_-]+)/(?<rest>[A-Za-z0-9_/-]*\.m3u8)$ {
+        # Evaluated in this request so ?token= is visible to /_authz.
+        set $playback_cred $token_or_cookie;
         auth_request /_authz;
         alias /media/live/$sid/$rest;
 
@@ -103,6 +134,7 @@ server {
     # so they can be cached hard -- but only privately: they are authorized
     # per viewer and must not land in a shared proxy.
     location ~ ^/hls/(?<sid>[A-Za-z0-9_-]+)/(?<rest>[A-Za-z0-9_/-]+\.(?:ts|m4s|mp4))$ {
+        set $playback_cred $token_or_cookie;
         auth_request /_authz;
         alias /media/live/$sid/$rest;
 
@@ -120,6 +152,7 @@ server {
     # key endpoint is separately authorized, so this auth_request is the outer
     # of two independent gates rather than the only one.
     location ~ ^/vod/(?<rid>[A-Za-z0-9_-]+)/(?<rest>[A-Za-z0-9_/-]+\.(?:m3u8|ts|m4s|mp4|jpg|vtt))$ {
+        set $playback_cred $token_or_cookie;
         auth_request /_authz;
 
         proxy_pass       http://$s3_host/${S3_BUCKET}/vod/$rid/$rest;
@@ -204,3 +237,4 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
+

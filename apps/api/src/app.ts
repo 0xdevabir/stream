@@ -14,6 +14,7 @@ import { healthRoutes } from "./routes/health";
 import { internalRoutes } from "./routes/internal";
 import { keyRoutes } from "./routes/keys";
 import { playbackRoutes } from "./routes/playback";
+import { providerRoutes } from "./routes/provider";
 import { recordingRoutes } from "./routes/recordings";
 import { streamRoutes } from "./routes/streams";
 import { wsRoutes } from "./routes/ws";
@@ -74,6 +75,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       scope.addHook("preHandler", verifyCsrf);
 
       await scope.register(authRoutes, { prefix: "/auth" });
+      await scope.register(providerRoutes, { prefix: "/provider" });
       await scope.register(streamRoutes, { prefix: "/streams" });
       await scope.register(playbackRoutes, { prefix: "/streams" });
       await scope.register(chatRoutes, { prefix: "/streams" });
@@ -93,3 +95,4 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   return app;
 }
+

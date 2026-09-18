@@ -35,6 +35,7 @@ x-app-env: &app-env
   REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL}
   PLAYBACK_TOKEN_TTL: ${PLAYBACK_TOKEN_TTL}
   MAX_CONCURRENT_SESSIONS_PER_USER: ${MAX_CONCURRENT_SESSIONS_PER_USER}
+  CDN_PUBLIC_BASE_URL: ${CDN_PUBLIC_BASE_URL:-}
 
 services:
   postgres:
@@ -200,3 +201,4 @@ volumes:
   # Live segments. Shared read-write with the transcoder, read-only with the
   # edge. Sized for (ladder bitrate x class length); see docs/operations.md.
   media:
+

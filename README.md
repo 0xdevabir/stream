@@ -66,9 +66,12 @@ latency by putting the browser next to the terminal.
 - [Architecture](docs/architecture.md) — how it fits together and why
 - [Deploying and operating](docs/deploy.md) — single-box guide, tuning, sizing
 - [Security model](docs/security.md) — including what is *not* protected
+- [Streaming provider](docs/provider.md) — multi-tenant live+VOD API (Cloudflare Stream–style)
+- [Embed / LMS](docs/embed.md) — signed playback tokens for third-party players
 
 ## Not included
 
 Billing, multi-region edge federation, native mobile apps, DVR scrubbing during
 a live class, simulcast to YouTube/Facebook, and deep retention analytics. The
 schema and edge layer leave room for each.
+

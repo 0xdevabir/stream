@@ -72,6 +72,99 @@ model Organization {
   streams     Stream[]
   invitations Invitation[]
   auditLogs   AuditLog[]
+  /// Present when this org backs a streaming-provider tenant.
+  tenant      Tenant?
+}
+
+/// Billable API customer for the streaming-provider surface.
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  maxConcurrentLives Int @default(3)
+  maxMinutesPerMonth Int @default(10000)
+
+  /// Service organization used so existing Stream FKs keep working.
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Synthetic instructor user that owns provider-created live inputs.
+  serviceUserId String @unique
+  serviceUser   User   @relation("TenantServiceUser", fields: [serviceUserId], references: [id])
+
+  apiKeys          ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  usageEvents      UsageEvent[]
+  streams          Stream[]
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  tenantId  String
+  name      String
+  /// Public prefix shown in dashboards, e.g. "sk_live_ab12".
+  keyPrefix String
+  keyHash   String    @unique
+  scopes    String[]  @default(["live:write", "live:read", "vod:read", "webhooks:write"])
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, revokedAt])
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(cuid())
+  tenantId  String
+  url       String
+  /// HMAC secret for X-Stream-Signature.
+  secret    String
+  events    String[]
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId, enabled])
+}
+
+model WebhookDelivery {
+  id         String    @id @default(cuid())
+  endpointId String
+  eventType  String
+  payload    Json
+  status     String    @default("pending")
+  attempts   Int       @default(0)
+  lastError  String?
+  createdAt  DateTime  @default(now())
+  deliveredAt DateTime?
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@index([status, createdAt])
+}
+
+model UsageEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  streamId  String?
+  kind      String
+  quantity  Float
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, kind, createdAt])
 }
 
 model User {
@@ -93,6 +186,7 @@ model User {
   viewerSessions    ViewerSession[]
   refreshTokens     RefreshToken[]
   auditLogs         AuditLog[]
+  providerTenant    Tenant?            @relation("TenantServiceUser")
 }
 
 model Membership {
@@ -128,6 +222,8 @@ model Course {
 model Stream {
   id             String  @id @default(cuid())
   organizationId String
+  /// Set when the live input was created via the provider API.
+  tenantId       String?
   courseId       String?
   instructorId   String
 
@@ -178,6 +274,7 @@ model Stream {
   updatedAt DateTime @updatedAt
 
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant         Tenant?         @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   course         Course?         @relation(fields: [courseId], references: [id], onDelete: SetNull)
   instructor     User            @relation("StreamInstructor", fields: [instructorId], references: [id])
   enrollments    Enrollment[]
@@ -187,6 +284,7 @@ model Stream {
   invitations    Invitation[]
 
   @@index([organizationId, status, scheduledAt])
+  @@index([tenantId, status])
   @@index([instructorId, status])
   @@index([courseId])
 }
@@ -354,3 +452,4 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([action, createdAt])
 }
+
