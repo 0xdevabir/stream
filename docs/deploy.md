@@ -5,11 +5,11 @@
 ```bash
 pnpm setup          # generate secrets, install, build shared, generate Prisma client
 pnpm up             # docker compose up -d --build
-pnpm db:seed        # an org, an instructor, three students, two classes
+pnpm db:seed        # demo tenant, console login, API key, smoke live inputs
 ```
 
 Then open <http://localhost:8080> and sign in as
-`instructor@example.com` / `changeme-please`.
+`console@example.com` / `changeme-please`.
 
 Migrations are applied by the API container on boot, so there is no separate
 step and no window where a new binary serves against an old schema. Set
@@ -111,10 +111,10 @@ pnpm db:studio             # browse the database
 docker compose -f infra/docker-compose.yml logs -f transcoder
 ```
 
-**A class is stuck at LIVE with nothing playing.** The transcoder reconciles
+**A live input is stuck at LIVE with nothing playing.** The transcoder reconciles
 against MediaMTX every few seconds, so this resolves itself; if it does not,
-the transcoder is down. `POST /v1/streams/:id/end` converges the row when no
-publisher is connected.
+the transcoder is down. `DELETE /v1/provider/live_inputs/:id` (or Cancel in the
+console) ends the input when no publisher is connected.
 
 **A class ended but no recording appeared.** Check the transcoder log for
 `uploading recording`. The most common cause is object storage credentials —
@@ -127,4 +127,5 @@ short relative to class length, raise it.
 **WHEP will not connect.** Almost always `WEBRTC_ADDITIONAL_HOSTS`, or UDP 8189
 blocked. The player falls back to HLS on its own, which is the right behaviour
 on a restricted network.
+
 

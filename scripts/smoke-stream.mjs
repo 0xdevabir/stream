@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 /**
- * Pushes a synthetic lecture into the seeded smoke class over RTMP.
+ * Pushes a synthetic pattern into the seeded smoke live input over RTMP.
  *
  * ffmpeg runs in a throwaway container joined to the compose network, so the
  * host needs nothing installed and the stream reaches MediaMTX by service name
  * rather than through a published port.
  *
- * The test pattern carries a burned-in timecode, which is what makes
- * glass-to-glass latency measurable: put the browser next to the terminal and
- * compare the two clocks.
- *
- *   node scripts/smoke-stream.mjs [--seconds 120] [--stream <id-or-key-name>]
+ *   node scripts/smoke-stream.mjs [--seconds 120]
  */
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -158,3 +154,4 @@ function fail(message) {
   console.error(`smoke: ${message}`);
   process.exit(1);
 }
+

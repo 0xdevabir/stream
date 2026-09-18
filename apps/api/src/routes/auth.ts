@@ -1,12 +1,10 @@
 import { createHash } from "node:crypto";
 
-import { type SessionUser, loginSchema, registerSchema } from "@stream/shared";
+import { type SessionUser, loginSchema } from "@stream/shared";
 import {
   burnPasswordTiming,
   hashIp,
-  hashPassword,
   prisma,
-  slugify,
   verifyPassword,
 } from "@stream/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -97,106 +95,11 @@ async function startSession(
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post(
-    "/register",
-    {
-      config: {
-        rateLimit: { max: 10, timeWindow: "1 hour" },
-      },
-    },
-    async (request, reply) => {
-      const input = validate.body(registerSchema, request);
-
-      const existing = await prisma.user.findUnique({
-        where: { email: input.email },
-        select: { id: true },
-      });
-      if (existing) {
-        // Registration inherently reveals whether an address is taken, so
-        // there is nothing to gain by being vague -- and a clear message
-        // saves the user a support ticket.
-        throw ApiError.conflict("An account with that email already exists");
-      }
-
-      const invitation = input.inviteToken
-        ? await prisma.invitation.findUnique({
-            where: { token: input.inviteToken },
-          })
-        : null;
-
-      if (input.inviteToken) {
-        if (
-          !invitation ||
-          invitation.acceptedAt !== null ||
-          invitation.expiresAt < new Date()
-        ) {
-          throw ApiError.badRequest("That invitation is invalid or has expired");
-        }
-        if (invitation.email !== input.email) {
-          throw ApiError.badRequest(
-            "That invitation was issued for a different email address",
-          );
-        }
-      } else if (!input.organizationName) {
-        throw ApiError.badRequest(
-          "Provide either an invitation token or a new organization name",
-        );
-      }
-
-      const passwordHash = await hashPassword(input.password);
-
-      const user = await prisma.$transaction(async (tx) => {
-        const created = await tx.user.create({
-          data: { email: input.email, name: input.name, passwordHash },
-        });
-
-        if (invitation) {
-          await tx.membership.create({
-            data: {
-              userId: created.id,
-              organizationId: invitation.organizationId,
-              role: invitation.role,
-            },
-          });
-          await tx.invitation.update({
-            where: { id: invitation.id },
-            data: { acceptedAt: new Date() },
-          });
-          if (invitation.streamId) {
-            await tx.enrollment.create({
-              data: { userId: created.id, streamId: invitation.streamId },
-            });
-          }
-        } else {
-          const organization = await tx.organization.create({
-            data: {
-              name: input.organizationName!,
-              slug: slugify(input.organizationName!),
-            },
-          });
-          // Whoever creates the organization owns it.
-          await tx.membership.create({
-            data: {
-              userId: created.id,
-              organizationId: organization.id,
-              role: "OWNER",
-            },
-          });
-        }
-
-        return created;
-      });
-
-      const session = await startSession(request, reply, user.id);
-      return reply.code(201).send({ user: session });
-    },
-  );
-
-  app.post(
     "/login",
     {
       config: {
         // Slow enough to make credential stuffing impractical, loose enough
-        // that a student mistyping a password a few times is not locked out.
+        // that a mistyped password a few times is not locked out.
         rateLimit: { max: 20, timeWindow: "15 minutes" },
       },
     },
@@ -265,3 +168,5 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { user: await buildSession(auth.userId) };
   });
 }
+
+

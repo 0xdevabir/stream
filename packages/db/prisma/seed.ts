@@ -1,13 +1,8 @@
 /**
- * Development seed.
+ * Development seed — provider demo tenant only.
  *
- * Creates classroom fixtures (org, instructor, students, smoke class) plus a
- * provider demo tenant with a console login (`console@example.com`) and API key.
- *
- * The smoke-test class uses a fixed stream key so `scripts/smoke-stream.sh`
- * can push a test pattern without a human copying credentials around. Every
- * generated credential is also written to `.seed-output.json` at the repo
- * root (gitignored) for the smoke scripts to read.
+ * Creates a console login, API key, and two live inputs (smoke + isolation)
+ * for local LMS / smoke testing. Credentials land in `.seed-output.json`.
  */
 import { writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -38,12 +33,6 @@ try {
   // .env is optional when the variables are already exported.
 }
 
-/**
- * `DATABASE_URL` names `postgres:5432`, which only resolves inside the compose
- * network. Seeding is run from the host, so prefer the published-port URL when
- * one is configured. Inside a container DATABASE_URL_HOST is never set, so
- * this is a no-op there.
- */
 if (process.env.DATABASE_URL_HOST) {
   process.env.DATABASE_URL = process.env.DATABASE_URL_HOST;
 }
@@ -58,8 +47,6 @@ if (!CONTENT_KEY_SECRET) {
 }
 
 const DEV_PASSWORD = "changeme-please";
-
-/** Fixed so the smoke test is reproducible. Dev only -- never seeded in prod. */
 const SMOKE_STREAM_KEY = "sk_dev_smoke_0000000000000000000000000";
 
 async function main() {
@@ -70,136 +57,9 @@ async function main() {
   }
 
   const passwordHash = await hashPassword(DEV_PASSWORD);
-
-  const org = await prisma.organization.upsert({
-    where: { slug: "northgate" },
-    update: {},
-    create: { name: "Northgate Academy", slug: "northgate" },
-  });
-
-  async function upsertUser(email: string, name: string, role: "OWNER" | "INSTRUCTOR" | "STUDENT") {
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { name },
-      create: { email, name, passwordHash },
-    });
-    await prisma.membership.upsert({
-      where: { userId_organizationId: { userId: user.id, organizationId: org.id } },
-      update: { role },
-      create: { userId: user.id, organizationId: org.id, role },
-    });
-    return user;
-  }
-
-  const instructor = await upsertUser(
-    "instructor@example.com",
-    "Dr. Amara Osei",
-    "OWNER",
-  );
-
-  const students = await Promise.all([
-    upsertUser("student1@example.com", "Rin Takahashi", "STUDENT"),
-    upsertUser("student2@example.com", "Diego Marchetti", "STUDENT"),
-    upsertUser("student3@example.com", "Priya Raghunathan", "STUDENT"),
-  ]);
-
-  const course = await prisma.course.upsert({
-    where: { organizationId_slug: { organizationId: org.id, slug: "systems-programming" } },
-    update: {},
-    create: {
-      organizationId: org.id,
-      slug: "systems-programming",
-      title: "Introduction to Systems Programming",
-      description:
-        "Memory, processes, and the C toolchain, taught live twice a week.",
-    },
-  });
-
-  for (const student of students) {
-    await prisma.courseEnrollment.upsert({
-      where: { userId_courseId: { userId: student.id, courseId: course.id } },
-      update: {},
-      create: { userId: student.id, courseId: course.id },
-    });
-  }
-
-  async function createStream(opts: {
-    title: string;
-    description: string;
-    scheduledAt: Date;
-    streamKey: string;
-    slug: string;
-  }) {
-    const contentKey = generateContentKey();
-    const existing = await prisma.stream.findUnique({ where: { slug: opts.slug } });
-
-    if (existing) {
-      // Re-seeding is how you reset the dev loop, so a class that has already
-      // been broadcast has to become publishable again. Leaving it ENDED means
-      // the MediaMTX auth hook refuses the next publish and the smoke test
-      // fails with a misleading "authentication failed".
-      const reopened = await prisma.stream.update({
-        where: { id: existing.id },
-        data: {
-          status: "SCHEDULED",
-          scheduledAt: opts.scheduledAt,
-          startedAt: null,
-          endedAt: null,
-          peakViewers: 0,
-        },
-      });
-      return { stream: reopened, streamKey: opts.streamKey };
-    }
-
-    const stream = await prisma.stream.create({
-      data: {
-        organizationId: org.id,
-        courseId: course.id,
-        instructorId: instructor.id,
-        slug: opts.slug,
-        title: opts.title,
-        description: opts.description,
-        scheduledAt: opts.scheduledAt,
-        accessMode: "ENROLLED",
-        shareToken: generateShareToken(),
-        streamKeyHash: hashStreamKey(opts.streamKey),
-        streamKeyWrapped: wrapSecret(opts.streamKey, CONTENT_KEY_SECRET!),
-        streamKeyPrefix: streamKeyPrefix(opts.streamKey),
-        contentKeyId: generateContentKeyId(),
-        contentKeyWrapped: wrapContentKey(contentKey, CONTENT_KEY_SECRET!),
-      },
-    });
-
-    await prisma.enrollment.createMany({
-      data: students.map((s) => ({ userId: s.id, streamId: stream.id })),
-      skipDuplicates: true,
-    });
-
-    return { stream, streamKey: opts.streamKey };
-  }
-
-  const now = Date.now();
-
-  const smoke = await createStream({
-    title: "Lecture 7 — Virtual Memory",
-    description:
-      "Page tables, TLBs, and why your program's addresses are a polite fiction.",
-    scheduledAt: new Date(now + 5 * 60_000),
-    streamKey: SMOKE_STREAM_KEY,
-    slug: "lecture-7-virtual-memory",
-  });
-
-  const tomorrow = await createStream({
-    title: "Lecture 8 — Dynamic Linking",
-    description: "Shared objects, symbol resolution, and the loader.",
-    scheduledAt: new Date(now + 24 * 60 * 60_000),
-    streamKey: generateStreamKey(),
-    slug: "lecture-8-dynamic-linking",
-  });
-
-  // Provider demo tenant + API key for LMS / embed integrations.
   const providerSlug = "demo-provider";
   const providerEmail = `provider+${providerSlug}@stream.local`;
+
   const providerUser = await prisma.user.upsert({
     where: { email: providerEmail },
     update: {},
@@ -235,7 +95,6 @@ async function main() {
     },
   });
 
-  // Console login for the demo tenant (developer console at /login).
   const consoleUser = await prisma.user.upsert({
     where: { email: "console@example.com" },
     update: { name: "Console Admin", passwordHash },
@@ -271,13 +130,82 @@ async function main() {
     },
   });
 
+  async function upsertLiveInput(opts: {
+    title: string;
+    slug: string;
+    streamKey: string;
+    scheduledAt: Date;
+  }) {
+    const contentKey = generateContentKey();
+    const existing = await prisma.stream.findUnique({
+      where: { slug: opts.slug },
+    });
+
+    if (existing) {
+      const reopened = await prisma.stream.update({
+        where: { id: existing.id },
+        data: {
+          status: "SCHEDULED",
+          tenantId: tenant.id,
+          organizationId: providerOrg.id,
+          instructorId: providerUser.id,
+          scheduledAt: opts.scheduledAt,
+          startedAt: null,
+          endedAt: null,
+          peakViewers: 0,
+          accessMode: "PUBLIC",
+          chatEnabled: false,
+          questionsEnabled: false,
+          recordEnabled: true,
+        },
+      });
+      return { stream: reopened, streamKey: opts.streamKey };
+    }
+
+    const stream = await prisma.stream.create({
+      data: {
+        organizationId: providerOrg.id,
+        tenantId: tenant.id,
+        instructorId: providerUser.id,
+        slug: opts.slug,
+        title: opts.title,
+        scheduledAt: opts.scheduledAt,
+        accessMode: "PUBLIC",
+        latencyMode: "LOW",
+        recordEnabled: true,
+        chatEnabled: false,
+        questionsEnabled: false,
+        shareToken: generateShareToken(),
+        streamKeyHash: hashStreamKey(opts.streamKey),
+        streamKeyWrapped: wrapSecret(opts.streamKey, CONTENT_KEY_SECRET!),
+        streamKeyPrefix: streamKeyPrefix(opts.streamKey),
+        contentKeyId: generateContentKeyId(),
+        contentKeyWrapped: wrapContentKey(contentKey, CONTENT_KEY_SECRET!),
+      },
+    });
+
+    return { stream, streamKey: opts.streamKey };
+  }
+
+  const now = Date.now();
+  const smoke = await upsertLiveInput({
+    title: "Smoke live input",
+    slug: "smoke-live-input",
+    streamKey: SMOKE_STREAM_KEY,
+    scheduledAt: new Date(now + 5 * 60_000),
+  });
+
+  const other = await upsertLiveInput({
+    title: "Isolation live input",
+    slug: "isolation-live-input",
+    streamKey: generateStreamKey(),
+    scheduledAt: new Date(now + 24 * 60 * 60_000),
+  });
+
   const output = {
     generatedAt: new Date().toISOString(),
-    organization: { id: org.id, slug: org.slug },
     logins: {
       console: { email: "console@example.com", password: DEV_PASSWORD },
-      instructor: { email: "instructor@example.com", password: DEV_PASSWORD },
-      student: { email: "student1@example.com", password: DEV_PASSWORD },
     },
     smokeStream: {
       id: smoke.stream.id,
@@ -285,7 +213,7 @@ async function main() {
       streamKey: smoke.streamKey,
       contentKeyId: smoke.stream.contentKeyId,
     },
-    upcomingStream: { id: tomorrow.stream.id, slug: tomorrow.stream.slug },
+    upcomingStream: { id: other.stream.id, slug: other.stream.slug },
     provider: {
       tenantId: tenant.id,
       slug: tenant.slug,
@@ -300,11 +228,9 @@ async function main() {
     `${JSON.stringify(output, null, 2)}\n`,
   );
 
-  console.log("Seeded Stream (demo tenant + classroom fixtures)");
+  console.log("Seeded Stream provider demo");
   console.log(`  console     console@example.com / ${DEV_PASSWORD}`);
-  console.log(`  instructor  instructor@example.com / ${DEV_PASSWORD}`);
-  console.log(`  students    student1..3@example.com / ${DEV_PASSWORD}`);
-  console.log(`  smoke class ${smoke.stream.slug}  (key ${smoke.streamKey})`);
+  console.log(`  smoke input ${smoke.stream.slug}  (key ${smoke.streamKey})`);
   console.log(`  provider    tenant=${tenant.slug}  apiKey=${apiKey.raw}`);
   console.log("  credentials written to .seed-output.json");
 }
@@ -317,5 +243,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-

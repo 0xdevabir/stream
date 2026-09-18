@@ -1,7 +1,6 @@
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
-import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { loadSession, verifyCsrf } from "./auth/session";
@@ -9,16 +8,12 @@ import { env } from "./env";
 import { registerErrorHandler } from "./errors";
 import { redis } from "./redis";
 import { authRoutes } from "./routes/auth";
-import { chatRoutes } from "./routes/chat";
 import { consoleRoutes } from "./routes/console";
 import { healthRoutes } from "./routes/health";
 import { internalRoutes } from "./routes/internal";
 import { keyRoutes } from "./routes/keys";
 import { playbackRoutes } from "./routes/playback";
 import { providerRoutes } from "./routes/provider";
-import { recordingRoutes } from "./routes/recordings";
-import { streamRoutes } from "./routes/streams";
-import { wsRoutes } from "./routes/ws";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -27,12 +22,6 @@ export async function buildApp(): Promise<FastifyInstance> {
       ...(env.isProduction
         ? {}
         : { transport: { target: "pino-pretty", options: { colorize: true } } }),
-      // Never let a credential reach the log, even at trace level.
-      redact: [
-        "req.headers.cookie",
-        "req.headers.authorization",
-        "req.headers['x-internal-token']",
-      ],
     },
     // The edge terminates TLS and is the only thing that talks to us, so its
     // X-Forwarded-* headers are the source of truth for scheme and client IP.
@@ -52,16 +41,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cookie, { secret: env.AUTH_SECRET });
 
   await app.register(rateLimit, {
-    // Off by default: media and WebSocket traffic are high-volume by design.
+    // Off by default: media traffic is high-volume by design.
     // Limits are applied per-route where abuse actually matters (login,
     // playback grants, key fetches).
     global: false,
     redis,
     nameSpace: "rl:",
-  });
-
-  await app.register(websocket, {
-    options: { maxPayload: 16 * 1024 },
   });
 
   await app.register(healthRoutes);
@@ -78,24 +63,12 @@ export async function buildApp(): Promise<FastifyInstance> {
       await scope.register(authRoutes, { prefix: "/auth" });
       await scope.register(consoleRoutes, { prefix: "/console" });
       await scope.register(providerRoutes, { prefix: "/provider" });
-      await scope.register(streamRoutes, { prefix: "/streams" });
+      // Same-origin playback cookie grants (optional; LMS uses signed tokens).
       await scope.register(playbackRoutes, { prefix: "/streams" });
-      await scope.register(chatRoutes, { prefix: "/streams" });
-      await scope.register(recordingRoutes, { prefix: "/recordings" });
       await scope.register(keyRoutes, { prefix: "/keys" });
     },
     { prefix: "/v1" },
   );
 
-  await app.register(
-    async (scope) => {
-      scope.addHook("onRequest", loadSession);
-      await scope.register(wsRoutes);
-    },
-    { prefix: "/ws" },
-  );
-
   return app;
 }
-
-
