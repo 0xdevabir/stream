@@ -219,6 +219,63 @@ export async function getVideo(
   };
 }
 
+export async function listLiveInputs(
+  ctx: TenantContext,
+  limit = 50,
+): Promise<LiveInput[]> {
+  const streams = await prisma.stream.findMany({
+    where: { tenantId: ctx.tenantId },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(limit, 100),
+    include: {
+      recordings: {
+        where: { status: "READY" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true },
+      },
+    },
+  });
+
+  return Promise.all(
+    streams.map(async (stream) => {
+      const streamKey = unwrapSecret(
+        Buffer.from(stream.streamKeyWrapped),
+        env.CONTENT_KEY_SECRET,
+      );
+      return serializeLiveInput(stream, streamKey);
+    }),
+  );
+}
+
+export async function listVideos(
+  ctx: TenantContext,
+  limit = 50,
+): Promise<ProviderVideo[]> {
+  const recordings = await prisma.recording.findMany({
+    where: { stream: { tenantId: ctx.tenantId } },
+    orderBy: { createdAt: "desc" },
+    take: Math.min(limit, 100),
+    include: { stream: { select: { id: true, tenantId: true } } },
+  });
+
+  return recordings.map((recording) => ({
+    id: recording.id,
+    liveInputId: recording.stream.id,
+    status: recording.status,
+    durationSeconds: recording.durationSeconds,
+    sizeBytes: recording.sizeBytes ? Number(recording.sizeBytes) : null,
+    vodUrl:
+      recording.status === "READY" ? absolute(vodMasterUrl(recording.id)) : null,
+    downloadUrl:
+      recording.downloadKey && recording.status === "READY"
+        ? absolute(`/vod/${recording.id}/download.mp4`)
+        : null,
+    createdAt: recording.createdAt.toISOString(),
+    readyAt: recording.readyAt?.toISOString() ?? null,
+  }));
+}
+
 async function requireTenantStream(tenantId: string, id: string) {
   const stream = await prisma.stream.findFirst({
     where: { id, tenantId },
@@ -279,3 +336,4 @@ function serializeLiveInput(
     recordingId,
   };
 }
+

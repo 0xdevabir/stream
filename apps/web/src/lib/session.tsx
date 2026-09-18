@@ -88,14 +88,7 @@ export function useSession(): SessionState {
   return context;
 }
 
-/** True for anyone who can create and run classes. */
-export function canTeach(user: SessionUser | null): boolean {
-  return (
-    user !== null &&
-    (user.role === "INSTRUCTOR" || user.role === "ADMIN" || user.role === "OWNER")
-  );
-}
-
 export function isOrgAdmin(user: SessionUser | null): boolean {
   return user !== null && (user.role === "ADMIN" || user.role === "OWNER");
 }
+

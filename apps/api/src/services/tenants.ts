@@ -18,6 +18,46 @@ export interface TenantContext {
   scopes: string[];
   maxConcurrentLives: number;
   maxMinutesPerMonth: number;
+  name?: string;
+  slug?: string;
+}
+
+/**
+ * Resolve the Tenant that owns this organization (console cookie session).
+ */
+export async function resolveTenantFromOrganization(
+  organizationId: string,
+): Promise<TenantContext> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { organizationId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      organizationId: true,
+      serviceUserId: true,
+      maxConcurrentLives: true,
+      maxMinutesPerMonth: true,
+    },
+  });
+
+  if (!tenant) {
+    throw ApiError.forbidden(
+      "This organization is not a streaming provider tenant",
+    );
+  }
+
+  return {
+    tenantId: tenant.id,
+    organizationId: tenant.organizationId,
+    serviceUserId: tenant.serviceUserId,
+    apiKeyId: "console",
+    scopes: ["*"],
+    maxConcurrentLives: tenant.maxConcurrentLives,
+    maxMinutesPerMonth: tenant.maxMinutesPerMonth,
+    name: tenant.name,
+    slug: tenant.slug,
+  };
 }
 
 export async function createTenant(input: {
@@ -141,3 +181,4 @@ export function requireScope(ctx: TenantContext, scope: string): void {
 export function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
+

@@ -1,19 +1,20 @@
 # Streaming provider (single-region)
 
-This platform can run as a **Cloudflare Stream–style live + VOD API**: tenants
-create live inputs with API keys, viewers play via signed tokens, recordings
-land in object storage, and a CDN fronts HLS delivery.
+This platform runs as a **Cloudflare Stream–style live + VOD API**: tenants
+create live inputs with API keys or the developer console, viewers play via
+signed tokens, recordings land in object storage, and a CDN fronts HLS delivery.
 
-Classroom UI, chat, and enrollments remain available but are **not** the
-provider product surface. See [embed.md](embed.md) for LMS integration.
+Students never visit this site — they watch inside the LMS player. See
+[embed.md](embed.md) for LMS integration.
 
 ## Planes
 
 | Plane | Components | Public? |
 |---|---|---|
-| Control | API replicas, Postgres, Redis | API LB only (`/v1/provider/*`) |
+| Control | API replicas, Postgres, Redis | API LB (`/v1/provider/*`); console cookies (`/v1/console/*`) |
 | Media | MediaMTX, transcoder workers, origin nginx, live volume | Ingest ports + origin (CDN only) |
 | Delivery | CDN → origin `/hls` `/vod` `/v1/keys` | CDN HTTPS |
+| Console | Next.js at `/` | Tenant owners/admins only |
 
 ## Production checklist (Phase 0)
 
@@ -64,3 +65,24 @@ Webhook events: `live.started`, `live.ended`, `video.ready`, `video.failed`.
 
 Playback for embeds uses a **signed JWT** (`token` query param or
 `Authorization: Bearer`). Cookies still work for same-origin apps.
+
+## Developer console
+
+Cookie-authenticated UI at `http://localhost:8080` (after seed):
+
+| Account | Password |
+|---|---|
+| `console@example.com` | `changeme-please` |
+
+Console calls `/v1/console/*` (same capabilities as the provider API, resolved
+from the signed-in user's organization → Tenant). Create additional tenants
+with:
+
+```bash
+pnpm exec tsx scripts/create-tenant.ts --name "Acme LMS"
+```
+
+The script prints a one-time `apiKey`, `consoleEmail`, and `consolePassword`.
+Self-serve signup is not enabled.
+
+

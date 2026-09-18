@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -26,9 +25,6 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // `next` is where the user was headed before the guard bounced them here.
-  // Only relative paths are honoured -- an open redirect here would hand an
-  // attacker a phishing page on our own domain.
   const next = safeNext(params.get("next"));
 
   useEffect(() => {
@@ -56,9 +52,9 @@ function LoginForm() {
           <div className="bg-brand-600 mx-auto mb-3 grid size-10 place-items-center rounded-xl">
             ▶
           </div>
-          <h1 className="text-xl font-semibold">Sign in</h1>
+          <h1 className="text-xl font-semibold">Stream console</h1>
           <p className="text-ink-500 mt-1 text-sm">
-            Live classes, recordings and Q&amp;A.
+            Manage live inputs, API keys, and webhooks for your tenant.
           </p>
         </div>
 
@@ -90,10 +86,8 @@ function LoginForm() {
           </Button>
 
           <p className="text-ink-500 text-center text-xs">
-            No account?{" "}
-            <Link href="/register" className="text-brand-400 hover:underline">
-              Create one
-            </Link>
+            Tenants are provisioned by an operator. Self-serve signup is not
+            enabled.
           </p>
         </form>
       </div>
@@ -102,6 +96,8 @@ function LoginForm() {
 }
 
 function safeNext(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/classes";
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/dashboard";
+  }
   return value;
 }

@@ -1,7 +1,9 @@
 /**
- * Create a provider tenant + API key.
+ * Create a provider tenant + API key + console owner login.
  *
  *   pnpm exec tsx scripts/create-tenant.ts --name "Acme LMS"
+ *
+ * Prints apiKey (once) and consoleEmail / consolePassword.
  */
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
@@ -31,8 +33,10 @@ const { prisma, generateApiKey, hashPassword, slugify } = await import(
 
 const name = values.name;
 const slug = slugify(name);
+const consolePassword = randomBytes(9).toString("base64url");
+const consoleEmail = `console+${slug}@stream.local`;
 
-const user = await prisma.user.create({
+const serviceUser = await prisma.user.create({
   data: {
     email: `provider+${slug}@stream.local`,
     name: `${name} (API)`,
@@ -40,11 +44,24 @@ const user = await prisma.user.create({
   },
 });
 
+const consoleUser = await prisma.user.create({
+  data: {
+    email: consoleEmail,
+    name: `${name} Console`,
+    passwordHash: await hashPassword(consolePassword),
+  },
+});
+
 const org = await prisma.organization.create({
   data: {
     name,
     slug: `tenant-${slug}`,
-    memberships: { create: { userId: user.id, role: "OWNER" } },
+    memberships: {
+      create: [
+        { userId: serviceUser.id, role: "OWNER" },
+        { userId: consoleUser.id, role: "OWNER" },
+      ],
+    },
   },
 });
 
@@ -53,7 +70,7 @@ const tenant = await prisma.tenant.create({
     name,
     slug,
     organizationId: org.id,
-    serviceUserId: user.id,
+    serviceUserId: serviceUser.id,
   },
 });
 
@@ -73,7 +90,9 @@ console.log(
       tenantId: tenant.id,
       slug: tenant.slug,
       apiKey: key.raw,
-      note: "Store the apiKey now; it cannot be recovered.",
+      consoleEmail,
+      consolePassword,
+      note: "Store apiKey and consolePassword now; they cannot be recovered.",
     },
     null,
     2,

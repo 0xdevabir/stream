@@ -1,54 +1,54 @@
-# Live Classes
+# Stream
 
-A self-hosted, low-latency, encrypted live-streaming platform for teaching.
-Instructors broadcast from a browser or from OBS; students watch on any device
-with adaptive quality; every class is recorded and replayable.
+Self-hosted **live + VOD streaming provider** (Cloudflare Stream–style): tenants
+create live inputs via API or the developer console, publish with OBS/RTMP/SRT/WHIP,
+and deliver AES-128 HLS through nginx + CDN with signed playback tokens.
 
-Built to replace a hosted video platform's per-minute delivery bill with plain
-nginx bandwidth. Transcoding happens once per class; the thousandth viewer
-costs the same as the first.
+End viewers watch inside your LMS or app — not on this site. The web UI is a
+**tenant developer console**.
 
 ```bash
 pnpm setup && pnpm up && pnpm db:seed
-open http://localhost:8080          # instructor@example.com / changeme-please
+open http://localhost:8080          # console@example.com / changeme-please
 ```
 
 ## What it does
 
-- **One-click live streaming** — the instructor presses Go Live in the browser
-  (WebRTC/WHIP); students just open a link. OBS and hardware encoders work too,
-  over RTMP or SRT with a stream key.
-- **Adaptive quality** — a GOP-aligned 1080p/720p/480p/360p ladder built by a
-  single ffmpeg process, so switching rungs never stalls. The ladder never
-  upscales a lower-resolution source.
-- **Low latency** — ~3 seconds glass-to-glass on the HLS path, or sub-second
-  over WebRTC for classes that opt into `ULTRA` mode.
-- **Encrypted delivery** — AES-128 encrypted segments; keys are served only to
-  authenticated viewers holding a live playback session. See
-  [docs/security.md](docs/security.md), which is specific about what that does
-  and does not protect.
-- **Access control** — public, private link, password, enrolled students, or
-  organization-wide. All five resolved by one function, one test matrix.
-- **Automatic recording** — the replay reuses the live segments, so recording
-  costs essentially nothing and is ready seconds after the class ends.
-- **Live chat and Q&A** — upvoted questions, pinning, moderation, slow mode,
-  fanned out over Redis so it works with any number of API instances.
-- **Teacher dashboard** — schedule classes, manage the roster, watch viewer
-  count and the quality distribution live, browse recordings.
-- **Web-first** — nothing to install for students, works on phones, and iOS
-  Safari's native HLS player is supported without a custom loader.
+- **Provider API** — `/v1/provider/*` with API keys for LMS integrations (live
+  inputs, tokens, videos, webhooks, usage).
+- **Developer console** — cookie-auth `/v1/console/*` for the same operations
+  in the browser: overview, live inputs, videos, API keys, webhooks, usage,
+  embed/test player.
+- **Adaptive quality** — GOP-aligned 1080p/720p/480p/360p ladder from one ffmpeg
+  process; never upscales a lower-resolution source.
+- **Low latency** — ~3s glass-to-glass HLS, or sub-second WebRTC (`ULTRA`).
+- **Encrypted delivery** — AES-128 segments; keys only for valid playback
+  sessions. See [docs/security.md](docs/security.md).
+- **Automatic recording** — VOD reuses live segments; ready soon after end.
+- **Multi-tenant** — quotas, API keys, webhooks per tenant. Provision with
+  `pnpm db:seed` or `pnpm exec tsx scripts/create-tenant.ts --name "Acme"`.
 
 ## Layout
 
 ```
-apps/api          Fastify: auth, access control, key delivery, chat, hooks
+apps/api          Fastify: provider + console APIs, auth, keys, hooks
 apps/transcoder   ffmpeg supervisor + recording/VOD worker
-apps/web          Next.js: player, studio, dashboard, replay library
+apps/web          Next.js: tenant developer console
 packages/db       Prisma schema, envelope encryption, seed
-packages/shared   zod contracts, WS protocol, ladder, canonical media paths
-infra/            compose, mediamtx.yml, nginx, Dockerfiles
-scripts/          smoke publisher and end-to-end verifier
+packages/shared   zod contracts, ladder, canonical media paths
+infra/            compose, mediamtx.yml, nginx, CDN worker, Dockerfiles
+scripts/          smoke publisher, verifier, create-tenant, load-test
 ```
+
+## Console quick start
+
+1. Seed → sign in as `console@example.com` / `changeme-please`.
+2. Create a **live input**, copy RTMP/SRT/WHIP ingest credentials.
+3. Publish from OBS; mint a playback token; preview on the input page or `/embed`.
+4. Create an **API key** and call `/v1/provider/*` from your LMS.
+
+Self-serve signup is disabled; tenants are created by an operator (seed or
+`scripts/create-tenant.ts`).
 
 ## Verifying it works
 
@@ -58,20 +58,15 @@ node scripts/smoke-verify.mjs                 # assert the whole chain
 pnpm test && pnpm typecheck
 ```
 
-The test pattern carries a burned-in clock, so you can read glass-to-glass
-latency by putting the browser next to the terminal.
-
 ## Docs
 
 - [Architecture](docs/architecture.md) — how it fits together and why
 - [Deploying and operating](docs/deploy.md) — single-box guide, tuning, sizing
 - [Security model](docs/security.md) — including what is *not* protected
-- [Streaming provider](docs/provider.md) — multi-tenant live+VOD API (Cloudflare Stream–style)
+- [Streaming provider](docs/provider.md) — multi-tenant live+VOD API
 - [Embed / LMS](docs/embed.md) — signed playback tokens for third-party players
 
 ## Not included
 
-Billing, multi-region edge federation, native mobile apps, DVR scrubbing during
-a live class, simulcast to YouTube/Facebook, and deep retention analytics. The
-schema and edge layer leave room for each.
-
+Billing UI, multi-region edge federation, DRM, native mobile apps, DVR scrubbing
+during live, simulcast to social networks.

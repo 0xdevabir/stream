@@ -6,11 +6,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Live Classes",
-    template: "%s · Live Classes",
+    default: "Stream",
+    template: "%s · Stream",
   },
   description:
-    "Low-latency, encrypted live classes with automatic recording and replay.",
+    "Live + VOD streaming provider API — developer console for tenants.",
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:8080",
   ),
@@ -20,8 +20,6 @@ export const viewport: Viewport = {
   themeColor: "#111318",
   width: "device-width",
   initialScale: 1,
-  // Students watch on phones; letting them pinch-zoom the chat is worth more
-  // than a perfectly locked layout.
   maximumScale: 5,
 };
 

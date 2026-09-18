@@ -36,6 +36,11 @@ export type PlayerProps = {
   poster?: string | null;
   whepUrl?: string | null;
   whepToken?: string | null;
+  /**
+   * When set, hls.js attaches Authorization on every request (segments + AES
+   * key). Required for cross-origin / query-token provider playback.
+   */
+  playbackToken?: string | null;
   autoPlay?: boolean;
   /** Rendered over the video surface when `src` is null. */
   placeholder?: ReactNode;
@@ -84,6 +89,7 @@ export function Player({
   poster,
   whepUrl,
   whepToken,
+  playbackToken,
   autoPlay = true,
   placeholder,
   onQualityChange,
@@ -142,7 +148,19 @@ export function Player({
         return;
       }
 
-      const hls = new HlsCtor(HLS_CONFIG);
+      const hls = new HlsCtor({
+        ...HLS_CONFIG,
+        ...(playbackToken
+          ? {
+              xhrSetup(xhr: XMLHttpRequest) {
+                xhr.setRequestHeader(
+                  "Authorization",
+                  `Bearer ${playbackToken}`,
+                );
+              },
+            }
+          : {}),
+      });
       hlsRef.current = hls;
 
       hls.on(HlsCtor.Events.MANIFEST_PARSED, (_event, data: ManifestParsedData) => {
@@ -201,7 +219,7 @@ export function Player({
       setLevels([]);
       setCurrentLevel(-1);
     };
-  }, [mode, src, autoPlay]);
+  }, [mode, src, autoPlay, playbackToken]);
 
   // ── WHEP ─────────────────────────────────────────────────────────────────
 
@@ -507,3 +525,4 @@ async function whepLatency(connection: WhepConnection | null): Promise<number | 
 }
 
 // (no re-exports: screens import formatters from @/lib/format directly)
+

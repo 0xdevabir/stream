@@ -1,8 +1,8 @@
 /**
  * Development seed.
  *
- * Creates one organization, an instructor, three students, a course, and two
- * classes -- one scheduled for tomorrow and one ready to go live right now.
+ * Creates classroom fixtures (org, instructor, students, smoke class) plus a
+ * provider demo tenant with a console login (`console@example.com`) and API key.
  *
  * The smoke-test class uses a fixed stream key so `scripts/smoke-stream.sh`
  * can push a test pattern without a human copying credentials around. Every
@@ -235,6 +235,31 @@ async function main() {
     },
   });
 
+  // Console login for the demo tenant (developer console at /login).
+  const consoleUser = await prisma.user.upsert({
+    where: { email: "console@example.com" },
+    update: { name: "Console Admin", passwordHash },
+    create: {
+      email: "console@example.com",
+      name: "Console Admin",
+      passwordHash,
+    },
+  });
+  await prisma.membership.upsert({
+    where: {
+      userId_organizationId: {
+        userId: consoleUser.id,
+        organizationId: providerOrg.id,
+      },
+    },
+    update: { role: "OWNER" },
+    create: {
+      userId: consoleUser.id,
+      organizationId: providerOrg.id,
+      role: "OWNER",
+    },
+  });
+
   await prisma.apiKey.deleteMany({ where: { tenantId: tenant.id } });
   const apiKey = generateApiKey();
   await prisma.apiKey.create({
@@ -250,6 +275,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     organization: { id: org.id, slug: org.slug },
     logins: {
+      console: { email: "console@example.com", password: DEV_PASSWORD },
       instructor: { email: "instructor@example.com", password: DEV_PASSWORD },
       student: { email: "student1@example.com", password: DEV_PASSWORD },
     },
@@ -265,6 +291,7 @@ async function main() {
       slug: tenant.slug,
       apiKey: apiKey.raw,
       apiBase: "/v1/provider",
+      consoleEmail: "console@example.com",
     },
   };
 
@@ -273,7 +300,8 @@ async function main() {
     `${JSON.stringify(output, null, 2)}\n`,
   );
 
-  console.log("Seeded Northgate Academy");
+  console.log("Seeded Stream (demo tenant + classroom fixtures)");
+  console.log(`  console     console@example.com / ${DEV_PASSWORD}`);
   console.log(`  instructor  instructor@example.com / ${DEV_PASSWORD}`);
   console.log(`  students    student1..3@example.com / ${DEV_PASSWORD}`);
   console.log(`  smoke class ${smoke.stream.slug}  (key ${smoke.streamKey})`);
@@ -289,4 +317,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
 
