@@ -135,9 +135,9 @@ export default function LiveInputDetailPage() {
           ingest={{
             rtmp: item.ingest.rtmp,
             srt: item.ingest.srt,
+            whip: item.ingest.whip,
           }}
         />
-        <CopyField label="WHIP URL" value={item.ingest.whip.url} />
       </section>
 
       {token && (
@@ -147,7 +147,7 @@ export default function LiveInputDetailPage() {
             label="Signed HLS URL"
             value={token.signedHlsUrl ?? token.signedVodUrl ?? "(not live yet)"}
           />
-          <CopyField label="Token" value={token.token} masked />
+          <CopyField label="Token" value={token.token} masked revealable />
           <p className="text-ink-500 text-xs">
             Expires {new Date(token.expiresAt).toLocaleString()}
           </p>
@@ -170,3 +170,4 @@ export default function LiveInputDetailPage() {
     </div>
   );
 }
+

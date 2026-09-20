@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -215,16 +216,51 @@ export function ViewerPill({ count }: { count: number }) {
   );
 }
 
+/** Works on http:// hosts too — `navigator.clipboard` is secure-context only. */
+async function copyText(value: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      // fall through
+    }
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "0";
+    textarea.style.left = "0";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Read-only text plus a copy button. Used for stream keys and ingest URLs. */
 export function CopyField({
   value,
   label,
   masked = false,
+  revealable = false,
 }: {
   value: string;
   label: string;
   masked?: boolean;
+  /** When true, show a Show/Hide toggle (for secrets on HTTP demos). */
+  revealable?: boolean;
 }) {
+  const [hidden, setHidden] = useState(masked);
+
   return (
     <div>
       <span className="label">{label}</span>
@@ -232,10 +268,21 @@ export function CopyField({
         <input
           readOnly
           value={value}
-          type={masked ? "password" : "text"}
+          type={hidden ? "password" : "text"}
           onFocus={(event) => event.currentTarget.select()}
           className="input font-mono text-xs"
         />
+        {revealable && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setHidden((v) => !v)}
+          >
+            {hidden ? "Show" : "Hide"}
+          </Button>
+        )}
         <CopyButton value={value} />
       </div>
     </div>
@@ -243,31 +290,23 @@ export function CopyField({
 }
 
 export function CopyButton({ value }: { value: string }) {
+  const [label, setLabel] = useState("Copy");
+
   return (
     <Button
       type="button"
       variant="secondary"
       size="sm"
       className="shrink-0"
-      onClick={(event) => {
-        const button = event.currentTarget;
-        // `navigator.clipboard` needs a secure context; on plain http://<ip>
-        // deployments it is undefined, so fall back to selecting the field.
-        void navigator.clipboard
-          ?.writeText(value)
-          .then(() => {
-            const original = button.textContent;
-            button.textContent = "Copied";
-            setTimeout(() => {
-              button.textContent = original;
-            }, 1200);
-          })
-          .catch(() => {
-            button.textContent = "Press ⌘C";
-          });
+      onClick={() => {
+        void copyText(value).then((ok) => {
+          setLabel(ok ? "Copied" : "Failed");
+          setTimeout(() => setLabel("Copy"), 1200);
+        });
       }}
     >
-      Copy
+      {label}
     </Button>
   );
 }
+

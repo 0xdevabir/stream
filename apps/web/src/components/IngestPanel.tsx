@@ -1,25 +1,18 @@
 "use client";
 
-import { useState } from "react";
-
 import { CopyField } from "@/components/ui";
 
 export type IngestCredentials = {
   rtmp: { url: string; streamKey: string };
   srt: { url: string };
+  whip?: { url: string };
 };
 
-/**
- * OBS / hardware-encoder ingest credentials for a live input.
- * Stream key is masked by default — a leaked key lets anyone publish.
- */
 export function IngestPanel({
   ingest,
 }: {
   ingest: IngestCredentials;
 }) {
-  const [revealed, setRevealed] = useState(false);
-
   return (
     <div className="space-y-4">
       <div>
@@ -33,29 +26,23 @@ export function IngestPanel({
 
       <CopyField label="RTMP server" value={ingest.rtmp.url} />
 
-      <div>
-        <CopyField
-          label="Stream key"
-          value={ingest.rtmp.streamKey}
-          masked={!revealed}
-        />
-        <div className="mt-1.5 flex gap-3">
-          <button
-            type="button"
-            onClick={() => setRevealed((value) => !value)}
-            className="text-ink-500 hover:text-ink-100 text-xs"
-          >
-            {revealed ? "Hide" : "Reveal"}
-          </button>
-        </div>
-      </div>
+      <CopyField
+        label="Stream key"
+        value={ingest.rtmp.streamKey}
+        masked
+        revealable
+      />
+
+      {ingest.whip?.url ? (
+        <CopyField label="WHIP URL" value={ingest.whip.url} />
+      ) : null}
 
       <details className="text-ink-500 text-xs">
         <summary className="hover:text-ink-300 cursor-pointer">
           SRT (lower latency over lossy networks)
         </summary>
         <div className="pt-3">
-          <CopyField label="SRT URL" value={ingest.srt.url} masked={!revealed} />
+          <CopyField label="SRT URL" value={ingest.srt.url} masked revealable />
         </div>
       </details>
     </div>
