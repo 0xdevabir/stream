@@ -89,38 +89,45 @@ services:
     volumes:
       - miniodata:/data
 
-  # Creates the recordings bucket. Anonymous download is enabled *inside the
-  # compose network only* -- MinIO is never published to the internet, and the
-  # segments it holds are AES-128 encrypted regardless. The edge still runs an
-  # auth_request in front of every /vod/ request.
-  # mc client binary from dl.min.io (Docker Hub minio/mc is also gone).
+  # Creates the recordings bucket + public-read policy for edge VOD proxy.
+  # Docker Hub minio/mc is gone; dl.min.io/client/mc also returns 410, so we
+  # use AWS CLI against the S3 API instead of `mc`.
   minio-init:
-    image: alpine:3.21
+    image: amazon/aws-cli:2.27.25
     depends_on:
       - minio
     environment:
       S3_BUCKET: ${S3_BUCKET}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${S3_REGION:-us-east-1}
     entrypoint:
       - /bin/sh
       - -c
       - |
         set -eu
-        apk add --no-cache curl ca-certificates >/dev/null
-        ARCH=$$(uname -m)
-        case "$$ARCH" in
-          x86_64) ARCH=amd64 ;;
-          aarch64|arm64) ARCH=arm64 ;;
-          *) echo "unsupported arch: $$ARCH"; exit 1 ;;
-        esac
-        curl -fsSL "https://dl.min.io/client/mc/release/linux-$${ARCH}/mc" -o /usr/local/bin/mc
-        chmod +x /usr/local/bin/mc
-        until mc alias set local http://minio:9000 "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}" >/dev/null 2>&1; do
+        ENDPOINT=http://minio:9000
+        until aws --endpoint-url "$$ENDPOINT" s3 ls >/dev/null 2>&1; do
           echo "waiting for minio..."; sleep 1;
         done
-        mc mb --ignore-existing "local/$${S3_BUCKET}"
-        mc anonymous set download "local/$${S3_BUCKET}"
+        aws --endpoint-url "$$ENDPOINT" s3 mb "s3://$${S3_BUCKET}" 2>/dev/null || true
+        cat > /tmp/policy.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "AWS": ["*"] },
+              "Action": ["s3:GetObject"],
+              "Resource": ["arn:aws:s3:::$${S3_BUCKET}/*"]
+            }
+          ]
+        }
+        EOF
+        aws --endpoint-url "$$ENDPOINT" s3api put-bucket-policy \
+          --bucket "$${S3_BUCKET}" --policy file:///tmp/policy.json
         echo "minio ready: bucket $${S3_BUCKET}"
     restart: "no"
 
@@ -217,5 +224,6 @@ volumes:
   # Live segments. Shared read-write with the transcoder, read-only with the
   # edge. Sized for (ladder bitrate x class length); see docs/operations.md.
   media:
+
 
 
