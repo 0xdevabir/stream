@@ -70,9 +70,11 @@ pnpm test && pnpm typecheck
 - [Streaming provider](docs/provider.md) — multi-tenant live+VOD API
 - [Developer integration](docs/integration.md) — LMS wiring (also `/guides/integration`)
 - [Embed / LMS](docs/embed.md) — signed playback tokens for third-party players
+- [Azure (student / single VM)](docs/azure.md) — deploy & test with Azure credits
 
 ## Not included
 
 Billing UI, multi-region edge federation, DRM, native mobile apps, DVR scrubbing
 during live, simulcast to social networks.
+
 

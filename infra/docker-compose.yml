@@ -71,8 +71,13 @@ services:
       timeout: 3s
       retries: 30
 
+  # Object storage for VOD. Official MinIO CE is archived / source-only and
+  # Docker Hub minio/* was removed (Sep 2026). We use Coolify's AGPL community
+  # builds of the last CVE-patched release (no AIStor license required).
+  # Official free alternative is MinIO AIStor Free (quay.io/minio/aistor/minio)
+  # but that needs a signup license file — awkward for one-VM smoke tests.
   minio:
-    image: minio/minio:latest
+    image: coollabsio/minio:RELEASE.2025-10-15T17-29-55Z
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -88,8 +93,9 @@ services:
   # compose network only* -- MinIO is never published to the internet, and the
   # segments it holds are AES-128 encrypted regardless. The edge still runs an
   # auth_request in front of every /vod/ request.
+  # mc client binary from dl.min.io (Docker Hub minio/mc is also gone).
   minio-init:
-    image: minio/mc:latest
+    image: alpine:3.21
     depends_on:
       - minio
     environment:
@@ -100,6 +106,16 @@ services:
       - /bin/sh
       - -c
       - |
+        set -eu
+        apk add --no-cache curl ca-certificates >/dev/null
+        ARCH=$$(uname -m)
+        case "$$ARCH" in
+          x86_64) ARCH=amd64 ;;
+          aarch64|arm64) ARCH=arm64 ;;
+          *) echo "unsupported arch: $$ARCH"; exit 1 ;;
+        esac
+        curl -fsSL "https://dl.min.io/client/mc/release/linux-$${ARCH}/mc" -o /usr/local/bin/mc
+        chmod +x /usr/local/bin/mc
         until mc alias set local http://minio:9000 "$${S3_ACCESS_KEY_ID}" "$${S3_SECRET_ACCESS_KEY}" >/dev/null 2>&1; do
           echo "waiting for minio..."; sleep 1;
         done
@@ -201,4 +217,5 @@ volumes:
   # Live segments. Shared read-write with the transcoder, read-only with the
   # edge. Sized for (ladder bitrate x class length); see docs/operations.md.
   media:
+
 
