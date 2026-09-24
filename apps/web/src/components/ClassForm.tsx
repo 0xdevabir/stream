@@ -163,13 +163,22 @@ export function ClassForm({
       <button
         type="button"
         onClick={() => setShowAdvanced((value) => !value)}
-        className="text-ink-500 hover:text-ink-100 text-xs"
+        aria-expanded={showAdvanced}
+        className="text-brand-500 ml-1 inline-flex items-center gap-1 text-[15px] transition-opacity active:opacity-50"
       >
         {showAdvanced ? "Hide" : "Show"} latency and interaction settings
+        <svg
+          viewBox="0 0 12 12"
+          className={`ease-ios size-3 transition-transform duration-300 ${showAdvanced ? "rotate-90" : ""}`}
+          fill="none"
+          aria-hidden
+        >
+          <path d="m4 2 4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
 
       {showAdvanced && (
-        <div className="border-ink-800 space-y-5 border-l-2 pl-4">
+        <div className="animate-fade-in space-y-5">
           <Field label="Latency mode" hint={latencyHint}>
             <Select
               value={values.latencyMode}
@@ -183,7 +192,7 @@ export function ClassForm({
             </Select>
           </Field>
 
-          <div className="space-y-3">
+          <div className="bg-ink-850/60 divide-ink-800 divide-y-[0.5px] rounded-2xl px-4 [&>label]:py-2.5">
             <Checkbox
               label="Record this class"
               checked={values.recordEnabled}

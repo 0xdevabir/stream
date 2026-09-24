@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Player } from "@/components/player/Player";
-import { Alert, Button, Spinner } from "@/components/ui";
+import { Alert, BackLink, Button, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { formatBytes, formatClock, formatDateTime } from "@/lib/format";
 
@@ -77,23 +77,16 @@ export default function ReplayPage() {
   const { recording } = data;
 
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4">
-        <div className="bg-ink-900/70 border-ink-800/80 mx-auto flex h-14 w-full max-w-5xl items-center gap-3 rounded-full border px-2.5 backdrop-blur-md sm:px-3">
-          <Link
-            href="/library"
-            aria-label="Back to recordings"
-            className="bg-ink-800 hover:bg-ink-700 grid size-9 shrink-0 place-items-center rounded-full transition-colors"
-          >
-            <svg viewBox="0 0 16 16" className="size-4 fill-current" aria-hidden>
-              <path d="M10.3 3.3a1 1 0 0 1 0 1.4L7 8l3.3 3.3a1 1 0 1 1-1.4 1.4l-4-4a1 1 0 0 1 0-1.4l4-4a1 1 0 0 1 1.4 0Z" />
-            </svg>
-          </Link>
-          <p className="min-w-0 flex-1 truncate text-sm font-black">{recording.title}</p>
+    <div className="animate-page-in min-h-dvh">
+      <header className="material sticky top-0 z-20 border-b-[0.5px] border-white/[0.07] pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-3 px-4">
+          <BackLink href="/library">Recordings</BackLink>
+          <p className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold max-sm:invisible">{recording.title}</p>
+          <span aria-hidden className="shrink-0 sm:w-[100px]" />
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl space-y-5 px-3 py-4 sm:px-4">
+      <main className="mx-auto w-full max-w-5xl space-y-5 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-4 max-sm:[&>div:first-child]:rounded-none">
         <Player
           src={data.vodUrl}
           live={false}
@@ -102,12 +95,14 @@ export default function ReplayPage() {
         />
 
         {recording.status !== "READY" && (
-          <Alert tone="info">Still processing. Reload in a minute.</Alert>
+          <div className="px-3 sm:px-0">
+            <Alert tone="info">Still processing. Reload in a minute.</Alert>
+          </div>
         )}
 
-        <div className="flex flex-wrap items-end gap-4 px-1">
+        <div className="flex flex-wrap items-end gap-4 px-4 sm:px-1">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-black sm:text-3xl">{recording.title}</h1>
+            <h1 className="text-[22px] leading-tight font-bold sm:text-[28px]">{recording.title}</h1>
             <p className="text-ink-500 mt-1 text-sm">
               {formatDateTime(recording.createdAt)}
               {recording.durationSeconds !== null &&

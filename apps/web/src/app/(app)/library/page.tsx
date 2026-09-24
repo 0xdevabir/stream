@@ -44,11 +44,18 @@ export default function LibraryPage() {
           body="Recorded classes show up here after they end."
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((recording) => (
-            <article key={recording.id} className="card group hover:border-ink-700 overflow-hidden transition-colors">
-              <Link href={`/replay/${recording.id}`} className="block">
-                <div className="bg-ink-950 relative aspect-video overflow-hidden">
+        <div className="grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((recording, index) => (
+            <article
+              key={recording.id}
+              style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+              className="animate-page-in group"
+            >
+              <Link
+                href={`/replay/${recording.id}`}
+                className="ease-ios block transition-transform duration-300 active:scale-[0.97] active:duration-100"
+              >
+                <div className="bg-ink-850 relative aspect-video overflow-hidden rounded-[18px] shadow-[0_2px_10px_rgb(0_0_0/0.08)]">
                   {recording.posterUrl ? (
                     // Posters are served through the same authorized /vod path
                     // as the segments, so a plain <img> is enough.
@@ -56,29 +63,31 @@ export default function LibraryPage() {
                     <img
                       src={recording.posterUrl}
                       alt=""
-                      className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="ease-ios size-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="text-ink-700 grid size-full place-items-center text-3xl">
-                      ▶
+                    <div className="text-ink-500 grid size-full place-items-center">
+                      <svg viewBox="0 0 16 16" className="size-8 fill-current" aria-hidden>
+                        <path d="M4 2.5v11l9.5-5.5z" />
+                      </svg>
                     </div>
                   )}
                   {recording.durationSeconds !== null && (
-                    <span className="absolute right-2 bottom-2 rounded-full bg-black/80 px-2 py-0.5 text-[11px] font-bold tabular-nums">
+                    <span className="font-rounded absolute right-2 bottom-2 rounded-full bg-black/45 px-2 py-0.5 text-xs font-semibold text-white tabular-nums backdrop-blur-xl">
                       {formatClock(recording.durationSeconds)}
                     </span>
                   )}
                 </div>
               </Link>
 
-              <div className="p-4">
-                <h3 className="truncate text-base font-black">
-                  <Link href={`/replay/${recording.id}`} className="hover:underline">
+              <div className="px-1 pt-2.5">
+                <h3 className="truncate text-[15px] font-semibold">
+                  <Link href={`/replay/${recording.id}`}>
                     {recording.title}
                   </Link>
                 </h3>
-                <p className="text-ink-500 mt-1 text-xs">
+                <p className="text-ink-500 mt-0.5 text-[13px]">
                   {formatDateTime(recording.createdAt)} ·{" "}
                   {formatBytes(recording.sizeBytes)}
                 </p>

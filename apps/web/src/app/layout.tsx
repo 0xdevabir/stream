@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 
+import { ConfirmProvider } from "@/components/dialog";
 import { SessionProvider } from "@/lib/session";
 
 import "./globals.css";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
+// San Francisco is used wherever the OS ships it; Inter is the closest match
+// for everyone else.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: {
@@ -18,24 +20,30 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:8080",
   ),
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Classes" },
 };
 
 export const viewport: Viewport = {
   themeColor: "#151515",
+  colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
   // Students watch on phones; letting them pinch-zoom the chat is worth more
   // than a perfectly locked layout.
   maximumScale: 5,
+  // Lets the tab bar sit under the home indicator, padded by safe-area insets.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable} ${geistMono.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body className="min-h-dvh">
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </SessionProvider>
       </body>
     </html>
   );

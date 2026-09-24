@@ -168,7 +168,7 @@ function Embed() {
   const src = status.status === "ENDED" ? status.vodUrl : status.hlsUrl;
 
   return (
-    <main className="bg-black">
+    <main className="theme-dark bg-black">
       <Player
         src={src}
         live={status.status === "LIVE"}
@@ -192,7 +192,7 @@ function Waiting({ status }: { status: PlaybackStatus["status"] }) {
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="grid min-h-dvh place-items-center bg-black">{children}</div>;
+  return <div className="theme-dark grid min-h-dvh place-items-center bg-black">{children}</div>;
 }
 
 function messageOf(cause: unknown): string {

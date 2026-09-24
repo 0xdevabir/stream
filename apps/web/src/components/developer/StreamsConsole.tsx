@@ -4,6 +4,7 @@ import type { StreamHealth, StreamSummary } from "@stream/shared";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { useConfirm } from "@/components/dialog";
 import { IngestPanel, type IngestCredentials } from "@/components/IngestPanel";
 import {
   Alert,
@@ -67,8 +68,8 @@ export function StreamsConsole() {
   return (
     <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
       <div className="card flex max-h-[70dvh] flex-col overflow-hidden lg:sticky lg:top-24 lg:self-start">
-        <div className="border-ink-800 flex items-center gap-2 border-b px-4 py-3">
-          <p className="text-sm font-bold">
+        <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+          <p className="text-[17px] font-semibold">
             Streams <span className="text-ink-500">{items.length}</span>
           </p>
           <Link href="/classes/new" className="ml-auto">
@@ -82,19 +83,19 @@ export function StreamsConsole() {
                 type="button"
                 onClick={() => setSelectedId(item.id)}
                 className={classNames(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
-                  item.id === selectedId ? "bg-brand-500/15" : "hover:bg-ink-850",
+                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 active:scale-[0.98]",
+                  item.id === selectedId ? "bg-brand-500/12" : "hover:bg-ink-850",
                 )}
               >
                 <StatusDot status={item.status} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-bold">{item.title}</span>
+                  <span className="block truncate text-[15px] font-medium">{item.title}</span>
                   <span className="text-ink-500 block truncate font-mono text-[11px]">
                     {item.id}
                   </span>
                 </span>
                 {item.status === "LIVE" && (
-                  <span className="text-ink-300 text-xs font-bold tabular-nums">
+                  <span className="text-ink-500 text-[13px] tabular-nums">
                     {item.viewerCount}
                   </span>
                 )}
@@ -130,6 +131,7 @@ function StreamDetail({
   const [health, setHealth] = useState<StreamHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"rotate" | "end" | null>(null);
+  const confirm = useConfirm();
 
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const closed = stream.status === "ENDED" || stream.status === "CANCELLED";
@@ -168,7 +170,13 @@ function StreamDetail({
     : null;
 
   const rotate = async () => {
-    if (!window.confirm("Rotate the key? A connected encoder is disconnected.")) return;
+    const ok = await confirm({
+      title: "Rotate stream key?",
+      message: "A connected encoder is disconnected.",
+      confirmLabel: "Rotate",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy("rotate");
     try {
       const data = await api.post<{ ingest: IngestCredentials }>(
@@ -183,7 +191,13 @@ function StreamDetail({
   };
 
   const end = async () => {
-    if (!window.confirm("End this stream for everyone?")) return;
+    const ok = await confirm({
+      title: "End this stream?",
+      message: "It ends for everyone watching.",
+      confirmLabel: "End",
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy("end");
     try {
       await api.post(`/v1/streams/${stream.id}/end`);
@@ -201,8 +215,8 @@ function StreamDetail({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {health?.paused ? (
-              <span className="bg-brand-500/20 text-brand-400 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-[0.14em] uppercase">
-                paused
+              <span className="bg-warn-500/15 text-warn-500 inline-flex h-[22px] items-center rounded-full px-2.5 text-xs font-semibold">
+                Paused
               </span>
             ) : (
               <StatusBadge status={status} />
@@ -211,12 +225,12 @@ function StreamDetail({
               {formatRelative(stream.startedAt ?? stream.scheduledAt)}
             </span>
           </div>
-          <h2 className="mt-2 truncate text-2xl font-black">{stream.title}</h2>
+          <h2 className="mt-2 truncate text-[28px] leading-tight font-bold">{stream.title}</h2>
         </div>
         <div className="flex gap-2">
           <a href={`/watch/${stream.slug}`} target="_blank" rel="noreferrer">
             <Button variant="secondary" size="sm">
-              Watch ↗
+              Watch
             </Button>
           </a>
           <Link href={`/classes/${stream.id}/manage`}>
@@ -239,10 +253,10 @@ function StreamDetail({
           <span
             className={classNames(
               "size-2.5 rounded-full",
-              encoder?.connected ? "bg-brand-500 live-dot" : "bg-ink-700",
+              encoder?.connected ? "bg-ok-500 live-dot" : "bg-ink-700",
             )}
           />
-          <p className="text-sm font-bold">
+          <p className="text-[15px] font-semibold">
             {health === null
               ? "Checking encoder…"
               : encoder?.connected
@@ -267,7 +281,7 @@ function StreamDetail({
 
       {!closed && (
         <section className="card p-5">
-          <h3 className="mb-4 text-sm font-bold">OBS</h3>
+          <h3 className="mb-4 text-[17px] font-semibold">OBS</h3>
           {ingest ? (
             <IngestPanel
               ingest={ingest}
@@ -281,10 +295,10 @@ function StreamDetail({
       )}
 
       <section className="card space-y-4 p-5">
-        <h3 className="text-sm font-bold">API</h3>
+        <h3 className="text-[17px] font-semibold">API</h3>
         <CopyField label="Stream ID" value={stream.id} />
         <CopyField label="Watch URL" value={`${origin}/watch/${stream.slug}`} />
-        <pre className="bg-ink-950 border-ink-800 overflow-x-auto rounded-xl border p-3 text-xs leading-relaxed">
+        <pre className="bg-ink-850 overflow-x-auto rounded-2xl p-4 font-mono text-[12px] leading-relaxed">
           {`curl ${origin}/v1/streams/${stream.id}/health \\
   -H "Authorization: Bearer $STREAM_API_KEY"`}
         </pre>

@@ -9,6 +9,7 @@ import { Player, type PlayerStats } from "@/components/player/Player";
 import { ChatPanel } from "@/components/room/ChatPanel";
 import { useRoom } from "@/components/room/useRoom";
 import {
+  BackLink,
   Button,
   Field,
   Input,
@@ -193,28 +194,21 @@ function Watch() {
   const title = stream?.title ?? "Class";
 
   return (
-    <div className="min-h-dvh">
-      <header className="sticky top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4">
-        <div className="bg-ink-900/70 border-ink-800/80 mx-auto flex h-14 w-full max-w-[1600px] items-center gap-3 rounded-full border px-2.5 backdrop-blur-md sm:px-3">
-          <Link
-            href="/classes"
-            aria-label="Back to classes"
-            className="bg-ink-800 hover:bg-ink-700 grid size-9 shrink-0 place-items-center rounded-full transition-colors"
-          >
-            <svg viewBox="0 0 16 16" className="size-4 fill-current" aria-hidden>
-              <path d="M10.3 3.3a1 1 0 0 1 0 1.4L7 8l3.3 3.3a1 1 0 1 1-1.4 1.4l-4-4a1 1 0 0 1 0-1.4l4-4a1 1 0 0 1 1.4 0Z" />
-            </svg>
-          </Link>
-          <h1 className="min-w-0 flex-1 truncate text-sm font-black">{title}</h1>
-          <div className="flex shrink-0 items-center gap-2 pr-1">
+    <div className="animate-page-in min-h-dvh">
+      <header className="material sticky top-0 z-20 border-b-[0.5px] border-white/[0.07] pt-[env(safe-area-inset-top)]">
+        <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center gap-3 px-4">
+          <BackLink href="/classes">Classes</BackLink>
+          <p className="min-w-0 flex-1 truncate text-center text-[17px] font-semibold max-sm:invisible">{title}</p>
+          <div className="flex shrink-0 items-center gap-2">
             {paused ? <PausedBadge /> : <StatusBadge status={status} />}
             {status === "LIVE" && <ViewerPill count={room.viewerCount} />}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-[1600px] gap-4 px-3 py-4 sm:px-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-5">
+      <main className="mx-auto grid w-full max-w-[1600px] gap-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-4 sm:space-y-5">
+          <div className="max-sm:[&>div]:rounded-none">
           <Player
             key={playerKey}
             src={status === "ENDED" ? (grant?.vodUrl ?? null) : hlsUrl}
@@ -233,9 +227,10 @@ function Watch() {
               ) : undefined
             }
           />
+          </div>
 
-          <div className="px-1">
-            <h2 className="text-2xl font-black sm:text-3xl">{title}</h2>
+          <div className="px-4 sm:px-1">
+            <h1 className="text-[22px] leading-tight font-bold sm:text-[28px]">{title}</h1>
             {stream?.instructor && (
               <p className="text-ink-500 mt-1 text-sm">{stream.instructor.name}</p>
             )}
@@ -248,8 +243,8 @@ function Watch() {
         </div>
 
         {showChat && (
-          <div className="lg:sticky lg:top-24 lg:h-[calc(100dvh-7rem)]">
-            <div className="flex h-[500px] flex-col lg:h-full">
+          <div className="px-3 sm:px-0 lg:sticky lg:top-24 lg:h-[calc(100dvh-7rem)]">
+            <div className="flex h-[min(560px,72dvh)] flex-col lg:h-full">
               <ChatPanel
                 room={room}
                 chatEnabled={grant?.chatEnabled ?? false}
@@ -303,7 +298,7 @@ function ScreenText({
   return (
     <div className="flex flex-col items-center gap-3">
       {icon}
-      <p className="text-xl font-black sm:text-3xl">{title}</p>
+      <p className="text-[22px] font-bold sm:text-[28px]">{title}</p>
       {body && <p className="text-ink-500 text-sm">{body}</p>}
     </div>
   );
@@ -311,7 +306,7 @@ function ScreenText({
 
 function PauseIcon() {
   return (
-    <span className="bg-brand-500/20 text-brand-400 grid size-14 place-items-center rounded-full">
+    <span className="animate-pop-in grid size-16 place-items-center rounded-full bg-white/15 text-white backdrop-blur-xl">
       <svg viewBox="0 0 16 16" className="size-5 fill-current" aria-hidden>
         <path d="M4 3h3v10H4zM9 3h3v10H9z" />
       </svg>
@@ -321,8 +316,8 @@ function PauseIcon() {
 
 function PausedBadge() {
   return (
-    <span className="bg-brand-500/20 text-brand-400 inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-[0.14em] uppercase">
-      paused
+    <span className="bg-warn-500/15 text-warn-500 inline-flex h-[22px] items-center rounded-full px-2.5 text-xs font-semibold">
+      Paused
     </span>
   );
 }
@@ -343,12 +338,12 @@ function Gatekeeper({
   slug: string;
 }) {
   return (
-    <main className="grid min-h-dvh place-items-center px-4">
+    <main className="animate-page-in grid min-h-dvh place-items-center px-4">
       <div className="card w-full max-w-sm space-y-5 p-7">
         {gate.kind === "password" ? (
           <>
             <div>
-              <h1 className="text-2xl font-black">Password required</h1>
+              <h1 className="text-2xl font-bold">Password required</h1>
               <p className="text-ink-500 mt-1 text-sm">{gate.message}</p>
             </div>
             <form
@@ -375,7 +370,7 @@ function Gatekeeper({
         ) : gate.kind === "signin" ? (
           <>
             <div>
-              <h1 className="text-2xl font-black">Sign in to watch</h1>
+              <h1 className="text-2xl font-bold">Sign in to watch</h1>
               <p className="text-ink-500 mt-1 text-sm">{gate.message}</p>
             </div>
             <Link href={`/login?next=${encodeURIComponent(`/watch/${slug}`)}`} className="block">
@@ -385,7 +380,7 @@ function Gatekeeper({
         ) : (
           <>
             <div>
-              <h1 className="text-2xl font-black">No access</h1>
+              <h1 className="text-2xl font-bold">No access</h1>
               <p className="text-ink-500 mt-1 text-sm">{gate.message}</p>
             </div>
             <Link href="/classes" className="block">

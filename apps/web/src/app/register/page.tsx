@@ -63,11 +63,11 @@ function RegisterForm() {
   };
 
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-10">
+    <main className="animate-page-in grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-4 text-center">
-          <Logo className="size-11" />
-          <h1 className="text-3xl font-black">
+          <Logo className="size-20 shadow-[0_10px_30px_rgb(0_122_255/0.3)]" />
+          <h1 className="page-title">
             {inviteToken ? "Join your team" : "Create account"}
           </h1>
         </div>
@@ -114,13 +114,14 @@ function RegisterForm() {
             Create account
           </Button>
 
-          <p className="text-ink-500 text-center text-xs">
-            Already have one?{" "}
-            <Link href="/login" className="text-brand-400 hover:underline">
-              Sign in
-            </Link>
-          </p>
         </form>
+
+        <p className="text-ink-500 mt-5 text-center text-[15px]">
+          Already have one?{" "}
+          <Link href="/login" className="text-brand-500 font-medium">
+            Sign in
+          </Link>
+        </p>
       </div>
     </main>
   );
