@@ -13,7 +13,9 @@ import {
   EmptyState,
   Field,
   Input,
+  Section,
   Spinner,
+  Stat,
   StatusBadge,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -166,36 +168,47 @@ export default function ManageClassPage() {
       {notice && <Alert tone="success">{notice}</Alert>}
 
       {tab === "settings" && (
-        <div className="space-y-6">
-          <div className="card p-5">
+        <div className="space-y-5">
+          <Section title="Student link" description="Share this so students can join.">
             <ShareLinkPanel
               slug={stream.slug}
               shareToken={null}
               accessMode={stream.accessMode}
             />
-          </div>
+          </Section>
 
-          <ClassForm
-            values={values}
-            onChange={setValues}
-            onSubmit={() => void save()}
-            submitLabel="Save changes"
-            busy={busy}
-            error={error}
-          />
+          <Section title="Class details" description="Title, schedule, access and interaction.">
+            <ClassForm
+              values={values}
+              onChange={setValues}
+              onSubmit={() => void save()}
+              submitLabel="Save changes"
+              busy={busy}
+              error={error}
+            />
+          </Section>
 
-          {stream.status !== "ENDED" && stream.status !== "CANCELLED" && (
-            <div className="border-live-500/30 flex flex-wrap items-center gap-3 rounded-lg border p-4">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Cancel this class</p>
-                <p className="text-ink-500 text-xs">
-                  Recordings of past sessions are kept.
-                </p>
-              </div>
-              <Button variant="danger" size="sm" onClick={() => void cancelClass()}>
-                Cancel class
-              </Button>
-            </div>
+          {stream.status !== "CANCELLED" && (
+            <Section
+              title="Danger zone"
+              className="border-live-500/30"
+              aside={
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={stream.status === "LIVE"}
+                  onClick={() => void cancelClass()}
+                >
+                  Cancel class
+                </Button>
+              }
+            >
+              <p className="text-ink-500 text-xs">
+                {stream.status === "LIVE"
+                  ? "End the broadcast before cancelling."
+                  : "Removes the class from upcoming lists. Existing recordings are kept."}
+              </p>
+            </Section>
           )}
         </div>
       )}
@@ -273,21 +286,25 @@ function Students({ streamId }: { streamId: string }) {
       {error && <Alert>{error}</Alert>}
       {notice && <Alert tone="info">{notice}</Alert>}
 
-      <form onSubmit={add} className="card space-y-3 p-4">
-        <Field
-          label="Add students"
-          hint="Email addresses, separated by commas, spaces or newlines. They must already be members of your organization."
-        >
-          <Input
-            value={emails}
-            onChange={(event) => setEmails(event.target.value)}
-            placeholder="student1@example.com, student2@example.com"
-          />
-        </Field>
-        <Button type="submit" size="sm" loading={busy}>
-          Enrol
-        </Button>
-      </form>
+      <Section
+        title="Add students"
+        description="They must already be members of your organization."
+      >
+        <form onSubmit={add} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <Field label="Email addresses" hint="Separate with commas, spaces or new lines.">
+              <Input
+                value={emails}
+                onChange={(event) => setEmails(event.target.value)}
+                placeholder="student1@example.com, student2@example.com"
+              />
+            </Field>
+          </div>
+          <Button type="submit" loading={busy} className="sm:mb-5">
+            Enrol
+          </Button>
+        </form>
+      </Section>
 
       {rows.length === 0 ? (
         <EmptyState
@@ -295,7 +312,8 @@ function Students({ streamId }: { streamId: string }) {
           body="Add students above, or switch this class to organization-wide access."
         />
       ) : (
-        <ul className="card divide-ink-800 divide-y">
+        <Section title={`Enrolled (${rows.length})`} bodyClassName="p-0">
+        <ul className="divide-ink-800 divide-y">
           {rows.map((row) => (
             <li key={row.id} className="flex items-center gap-3 px-4 py-2.5">
               <div className="min-w-0 flex-1">
@@ -312,6 +330,7 @@ function Students({ streamId }: { streamId: string }) {
             </li>
           ))}
         </ul>
+        </Section>
       )}
     </div>
   );
@@ -351,17 +370,18 @@ function AnalyticsPanel({ streamId }: { streamId: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <Stat label="Watching now" value={formatCount(data.currentViewers)} />
-        <Stat label="Peak viewers" value={formatCount(data.peakViewers)} />
-        <Stat label="Unique viewers" value={formatCount(data.uniqueViewers)} />
-        <Stat label="Sessions" value={formatCount(data.totalSessions)} />
-        <Stat label="Chat messages" value={formatCount(data.chatMessages)} />
-        <Stat label="Questions" value={formatCount(data.questions)} />
-      </div>
+      <Section title="Audience" description="Refreshes every 15 seconds.">
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
+          <Stat label="Watching now" value={formatCount(data.currentViewers)} tone="good" />
+          <Stat label="Peak viewers" value={formatCount(data.peakViewers)} />
+          <Stat label="Unique viewers" value={formatCount(data.uniqueViewers)} />
+          <Stat label="Sessions" value={formatCount(data.totalSessions)} />
+          <Stat label="Chat messages" value={formatCount(data.chatMessages)} />
+          <Stat label="Questions" value={formatCount(data.questions)} />
+        </div>
+      </Section>
 
-      <div className="card p-4">
-        <h3 className="mb-3 text-sm font-medium">Quality reached</h3>
+      <Section title="Quality reached">
         {totalQuality === 0 ? (
           <p className="text-ink-500 text-xs">
             No playback telemetry yet. This fills in as students watch.
@@ -390,16 +410,7 @@ function AnalyticsPanel({ streamId }: { streamId: string }) {
           A ladder skewed low means students are bandwidth-limited, not that the
           encode is poor.
         </p>
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="card p-4">
-      <p className="text-ink-500 text-[11px] tracking-wide uppercase">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      </Section>
     </div>
   );
 }

@@ -9,11 +9,14 @@ RUN corepack enable \
 WORKDIR /app
 
 FROM base AS deps
+COPY infra/docker.npmrc .npmrc
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/web/package.json ./apps/web/
-RUN pnpm install --frozen-lockfile --filter @stream/web...
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store \
+      --filter @stream/web...
 
 FROM deps AS build
 COPY turbo.json ./
@@ -25,6 +28,8 @@ COPY apps/web ./apps/web
 # this is only needed for absolute links in metadata.
 ARG NEXT_PUBLIC_BASE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL
+ARG NEXT_PUBLIC_DEMO_LOGINS=1
+ENV NEXT_PUBLIC_DEMO_LOGINS=$NEXT_PUBLIC_DEMO_LOGINS
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm --filter @stream/shared run build \
@@ -46,3 +51,4 @@ WORKDIR /app/apps/web
 # pnpm links a workspace package's binaries into that package's own
 # node_modules/.bin, not the root one.
 CMD ["node_modules/.bin/next", "start", "--port", "3000", "--hostname", "0.0.0.0"]
+

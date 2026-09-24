@@ -32,7 +32,11 @@ const OPTIONS = (overrides: Partial<LadderOptions> = {}): LadderOptions => ({
   listSize: 8,
   encoder: "libx264",
   preset: "veryfast",
+  rateControl: "capped-crf",
+  quality: 23,
+  hwDevice: "/dev/dri/renderD128",
   source: SOURCE,
+  fps: 30,
   thumbnailDir: "/media/live/abc/thumbs",
   thumbnailIntervalSeconds: 30,
   ...overrides,
@@ -127,11 +131,25 @@ describe("buildFfmpegArgs", () => {
     assert.equal(valueAfter(args, "-keyint_min"), "60");
   });
 
-  it("sizes the GOP from the source frame rate", () => {
+  it("sizes the GOP from the encoded frame rate", () => {
     const args = buildFfmpegArgs(
-      OPTIONS({ source: { ...SOURCE, fps: 60 }, segmentSeconds: 1 }),
+      OPTIONS({ source: { ...SOURCE, fps: 60 }, fps: 60, segmentSeconds: 1 }),
     );
     assert.equal(valueAfter(args, "-g"), "60");
+  });
+
+  it("decimates a high frame rate source once, before the split", () => {
+    const args = buildFfmpegArgs(
+      OPTIONS({ source: { ...SOURCE, fps: 60 }, fps: 30 }),
+    );
+    assert.match(valueAfter(args, "-filter_complex") ?? "", /^\[0:v\]fps=30,split=5/);
+    // The GOP follows the output rate, or segments would be 2s long.
+    assert.equal(valueAfter(args, "-g"), "30");
+  });
+
+  it("leaves the frame rate alone when the source is within the cap", () => {
+    const graph = valueAfter(buildFfmpegArgs(OPTIONS()), "-filter_complex") ?? "";
+    assert.doesNotMatch(graph, /fps=30,/);
   });
 
   it("always enables segment encryption", () => {
@@ -145,6 +163,14 @@ describe("buildFfmpegArgs", () => {
   it("writes segments atomically so nginx cannot serve a partial file", () => {
     const args = buildFfmpegArgs(OPTIONS());
     assert.match(valueAfter(args, "-hls_flags") ?? "", /temp_file/);
+  });
+
+  it("continues the class across an encoder restart instead of overwriting it", () => {
+    const flags = valueAfter(buildFfmpegArgs(OPTIONS()), "-hls_flags") ?? "";
+    // Without these a publisher reconnect restarts numbering at zero and ends
+    // the live playlist, which viewers see as the class finishing.
+    assert.match(flags, /append_list/);
+    assert.match(flags, /omit_endlist/);
   });
 
   it("decodes the source exactly once and splits it", () => {
@@ -196,11 +222,52 @@ describe("buildFfmpegArgs", () => {
     assert.match(args, /-preset:v:0 veryfast/);
   });
 
+  it("uses capped CRF for x264 by default, with no nominal bitrate", () => {
+    const args = buildFfmpegArgs(OPTIONS());
+    assert.equal(valueAfter(args, "-crf:v:0"), "23");
+    // A -b:v alongside -crf would switch x264 back to ABR.
+    assert.equal(valueAfter(args, "-b:v:0"), undefined);
+  });
+
+  it("holds the nominal bitrate under cbr", () => {
+    const args = buildFfmpegArgs(OPTIONS({ rateControl: "cbr" }));
+    assert.equal(valueAfter(args, "-b:v:0"), "4500k");
+    assert.equal(valueAfter(args, "-crf:v:0"), undefined);
+  });
+
   it("switches encoder settings for nvenc", () => {
     const args = buildFfmpegArgs(OPTIONS({ encoder: "h264_nvenc" })).join(" ");
     assert.match(args, /-c:v:0 h264_nvenc/);
-    assert.match(args, /-rc:v:0 cbr/);
+    assert.match(args, /-rc:v:0 vbr -cq:v:0 23 -b:v:0 0/);
     assert.doesNotMatch(args, /zerolatency/);
+
+    const cbr = buildFfmpegArgs(
+      OPTIONS({ encoder: "h264_nvenc", rateControl: "cbr" }),
+    ).join(" ");
+    assert.match(cbr, /-rc:v:0 cbr/);
+  });
+
+  it("feeds QSV nv12 frames and asks it for QVBR", () => {
+    const args = buildFfmpegArgs(OPTIONS({ encoder: "h264_qsv" }));
+    assert.match(valueAfter(args, "-filter_complex") ?? "", /scale=-2:1080,format=nv12\[v0out\]/);
+    assert.equal(valueAfter(args, "-global_quality:v:0"), "23");
+    assert.equal(valueAfter(args, "-b:v:0"), "4500k");
+  });
+
+  it("uploads frames to the VAAPI device before encoding", () => {
+    const args = buildFfmpegArgs(OPTIONS({ encoder: "h264_vaapi" }));
+    assert.equal(valueAfter(args, "-vaapi_device"), "/dev/dri/renderD128");
+    // The device has to be opened before the input it filters.
+    assert.ok(args.indexOf("-vaapi_device") < args.indexOf("-i"));
+    assert.match(valueAfter(args, "-filter_complex") ?? "", /format=nv12,hwupload\[v0out\]/);
+    // VAAPI has no plain "baseline" profile constant.
+    assert.equal(valueAfter(args, "-profile:v:3"), "constrained_baseline");
+  });
+
+  it("keeps software encoders free of hardware plumbing", () => {
+    const args = buildFfmpegArgs(OPTIONS());
+    assert.ok(!args.includes("-vaapi_device"));
+    assert.doesNotMatch(valueAfter(args, "-filter_complex") ?? "", /hwupload|nv12/);
   });
 
   it("puts the segment pattern and playlist under the stream directory", () => {
@@ -212,7 +279,8 @@ describe("buildFfmpegArgs", () => {
     // The HLS output is followed by a second output for poster thumbnails,
     // so the playlist is not the final argument.
     assert.ok(args.includes("/media/live/abc/%v/index.m3u8"));
-    assert.equal(args.at(-1), "/media/live/abc/thumbs/thumb_%05d.jpg");
+    assert.equal(args.at(-1), "/media/live/abc/thumbs/thumb_%s.jpg");
+    assert.equal(valueAfter(args, "-strftime"), "1");
   });
 });
 

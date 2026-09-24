@@ -47,17 +47,18 @@ export type PlayerProps = {
 /**
  * hls.js tuned for 1-second segments.
  *
- * `liveSyncDurationCount: 3` parks the playhead three segments behind the
- * live edge -- close enough for teaching (~3s glass-to-glass), far enough that
- * a single slow segment does not stall. `maxLiveSyncPlaybackRate` lets the
- * player catch up by playing slightly fast instead of jumping, which is much
- * less jarring than a seek mid-sentence.
+ * `liveSyncDurationCount: 2` parks the playhead two segments behind the live
+ * edge: ~2.5-3s glass-to-glass once encode and ingest are added, and still
+ * one full segment of slack so a single slow fetch does not stall. (Three
+ * cost a whole extra second for every viewer.) `maxLiveSyncPlaybackRate` lets
+ * the player catch up by playing slightly fast instead of jumping, which is
+ * much less jarring than a seek mid-sentence.
  */
 const HLS_CONFIG = {
   lowLatencyMode: true,
   enableWorker: true,
   backBufferLength: 30,
-  liveSyncDurationCount: 3,
+  liveSyncDurationCount: 2,
   liveMaxLatencyDurationCount: 12,
   maxLiveSyncPlaybackRate: 1.5,
   // Cold-start guess. Too high and the first segment stalls a slow connection;

@@ -22,6 +22,12 @@ const sessions = new Map<string, StreamSession>();
 const missingSince = new Map<string, number>();
 /** Classes we tried and failed to start, so we do not thrash on them. */
 const backoffUntil = new Map<string, number>();
+/**
+ * Sessions still publishing their recording after the class ended. A new
+ * session for the same class must wait: it starts by clearing the live
+ * directory the upload is still reading from.
+ */
+const draining = new Map<string, Promise<void>>();
 
 let running = true;
 
@@ -36,10 +42,23 @@ async function tick(): Promise<void> {
   const now = Date.now();
 
   for (const path of live) {
-    if (sessions.has(path.streamId)) {
+    const existing = sessions.get(path.streamId);
+    if (existing) {
+      if (existing.isRunning()) {
+        if (missingSince.delete(path.streamId)) existing.sourceReturned();
+        continue;
+      }
+
+      // The session gave up by itself (an encoder that would not stay up).
+      // Once it has finished publishing what it recorded, a publisher that is
+      // still there gets a fresh session -- before, the dead one stayed in the
+      // map and the class could not go live again until a transcoder restart.
+      if (!existing.isStopped()) continue;
+      sessions.delete(path.streamId);
       missingSince.delete(path.streamId);
-      continue;
     }
+
+    if (draining.has(path.streamId)) continue;
 
     const backoff = backoffUntil.get(path.streamId);
     if (backoff && now < backoff) continue;
@@ -78,7 +97,11 @@ async function tick(): Promise<void> {
     const since = missingSince.get(streamId);
     if (since === undefined) {
       missingSince.set(streamId, now);
-      logger.info({ streamId }, "publisher gone; waiting to see if it returns");
+      logger.info(
+        { streamId, graceMs: env.SOURCE_GRACE_MS },
+        "publisher gone; holding the class open",
+      );
+      session.sourceLost();
       continue;
     }
 
@@ -89,15 +112,19 @@ async function tick(): Promise<void> {
 
     // Finalizing uploads a whole class and can take a while; it must not
     // block the next reconciliation tick.
-    void session.stop().catch((error) => {
-      logger.error(
-        {
-          streamId,
-          err: error instanceof Error ? error.message : String(error),
-        },
-        "failed to stop session cleanly",
-      );
-    });
+    const finishing = session
+      .stop()
+      .catch((error) => {
+        logger.error(
+          {
+            streamId,
+            err: error instanceof Error ? error.message : String(error),
+          },
+          "failed to stop session cleanly",
+        );
+      })
+      .finally(() => draining.delete(streamId));
+    draining.set(streamId, finishing);
   }
 }
 
@@ -126,9 +153,11 @@ async function main(): Promise<void> {
     logger.info({ signal, sessions: sessions.size }, "shutting down");
 
     // Stop every class properly so in-progress recordings still get published.
-    await Promise.allSettled(
-      [...sessions.values()].map((session) => session.stop()),
-    );
+    await Promise.allSettled([
+      ...[...sessions.values()].map((session) => session.stop()),
+      // Classes that already ended may still be uploading their replay.
+      ...draining.values(),
+    ]);
     process.exit(0);
   };
 

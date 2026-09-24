@@ -1,6 +1,6 @@
 # Run from the repository root:
 #   docker compose --env-file .env -f infra/docker-compose.yml up -d --build
-# or simply `pnpm up`, which wraps exactly that.
+# or `pnpm run up` (not bare `pnpm up` — that is pnpm's update alias).
 
 name: stream
 
@@ -167,6 +167,7 @@ services:
       dockerfile: infra/web.Dockerfile
       args:
         NEXT_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+        NEXT_PUBLIC_DEMO_LOGINS: ${NEXT_PUBLIC_DEMO_LOGINS:-1}
     restart: unless-stopped
     environment:
       <<: *app-env
@@ -200,3 +201,4 @@ volumes:
   # Live segments. Shared read-write with the transcoder, read-only with the
   # edge. Sized for (ladder bitrate x class length); see docs/operations.md.
   media:
+

@@ -25,9 +25,16 @@ const schema = z.object({
   LADDER: z.string().default("1080p,720p,480p,360p"),
 
   VIDEO_ENCODER: z
-    .enum(["libx264", "h264_nvenc", "h264_vaapi"])
+    .enum(["libx264", "h264_nvenc", "h264_qsv", "h264_vaapi"])
     .default("libx264"),
   X264_PRESET: z.string().default("veryfast"),
+  /** DRI render node for VAAPI; the container needs /dev/dri mapped in. */
+  HW_DEVICE: z.string().default("/dev/dri/renderD128"),
+  RATE_CONTROL: z.enum(["capped-crf", "cbr"]).default("capped-crf"),
+  /** CRF / CQ / QVBR target under capped-crf. 23 is visually clean for slides. */
+  VIDEO_QUALITY: z.coerce.number().int().min(15).max(35).default(23),
+  /** Sources above this frame rate are encoded at it. */
+  MAX_FPS: z.coerce.number().int().min(10).max(60).default(30),
 
   HLS_SEGMENT_SECONDS: z.coerce.number().min(0.5).max(10).default(1),
   HLS_LIST_SIZE: z.coerce.number().int().min(3).max(60).default(8),

@@ -19,10 +19,13 @@ import type { Rendition } from "@stream/shared";
  *     our authenticated endpoint before it can decode anything.
  */
 
+export type VideoEncoder = "libx264" | "h264_nvenc" | "h264_qsv" | "h264_vaapi";
+export type RateControl = "capped-crf" | "cbr";
+
 export interface SourceInfo {
   width: number;
   height: number;
-  /** Frames per second, rounded. Used to size the GOP. */
+  /** Frames per second, rounded. */
   fps: number;
   hasAudio: boolean;
 }
@@ -34,9 +37,20 @@ export interface LadderOptions {
   renditions: Rendition[];
   segmentSeconds: number;
   listSize: number;
-  encoder: "libx264" | "h264_nvenc" | "h264_vaapi";
+  encoder: VideoEncoder;
   preset: string;
+  /**
+   * `capped-crf` spends bits only where the picture changes and treats each
+   * rendition's maxrate as a ceiling; `cbr` holds the nominal rate regardless.
+   */
+  rateControl: RateControl;
+  /** CRF / CQ / QVBR quality target for `capped-crf`. Lower is better. */
+  quality: number;
+  /** DRI render node, used by the VAAPI encoder. */
+  hwDevice: string;
   source: SourceInfo;
+  /** Encoded frame rate, from `outputFps`. Sizes the GOP. */
+  fps: number;
   /** Where periodic thumbnails are written, for the recording's poster. */
   thumbnailDir: string;
   thumbnailIntervalSeconds: number;
@@ -57,6 +71,17 @@ export function selectRenditions(
   const ordered = [...renditions].sort((a, b) => b.height - a.height);
   const fitting = ordered.filter((rendition) => rendition.height <= source.height);
   return fitting.length > 0 ? fitting : [ordered.at(-1)!];
+}
+
+/**
+ * The frame rate the ladder is encoded at: the source's, capped at `maxFps`.
+ *
+ * A lecture gains nothing visible from 60fps, but it doubles encode work and
+ * adds roughly a third to every viewer's bitrate -- and bandwidth is the cost
+ * that grows with the audience.
+ */
+export function outputFps(source: Pick<SourceInfo, "fps">, maxFps: number): number {
+  return Math.min(source.fps, maxFps);
 }
 
 /** RFC 6381 codec string, needed by the multivariant playlist. */
@@ -120,36 +145,79 @@ function encoderArgs(
   rendition: Rendition,
   index: number,
 ): string[] {
-  const { encoder, preset } = options;
+  const { encoder, preset, quality } = options;
+  const capped = options.rateControl === "capped-crf";
+  const opt = (name: string, value: string | number) => [
+    `-${name}:v:${index}`,
+    String(value),
+  ];
+  const nominal = `${rendition.videoKbps}k`;
+
+  // VAAPI names the baseline profile after what it actually produces.
+  const profile =
+    encoder === "h264_vaapi" && rendition.profile === "baseline"
+      ? "constrained_baseline"
+      : rendition.profile;
+
   const args = [
     `-c:v:${index}`,
     encoder,
-    `-b:v:${index}`,
-    `${rendition.videoKbps}k`,
-    `-maxrate:v:${index}`,
-    `${rendition.maxrateKbps}k`,
-    `-bufsize:v:${index}`,
-    `${rendition.bufsizeKbps}k`,
-    `-profile:v:${index}`,
-    rendition.profile,
+    ...opt("maxrate", `${rendition.maxrateKbps}k`),
+    ...opt("bufsize", `${rendition.bufsizeKbps}k`),
+    ...opt("profile", profile),
   ];
 
-  if (encoder === "libx264") {
-    // `zerolatency` disables lookahead and B-frame buffering; it costs a few
-    // percent of compression efficiency and removes ~1s of encoder delay,
-    // which is the right trade for a live class.
-    args.push(`-preset:v:${index}`, preset, `-tune:v:${index}`, "zerolatency");
-  } else if (encoder === "h264_nvenc") {
-    args.push(`-preset:v:${index}`, "p4", `-tune:v:${index}`, "ll", `-rc:v:${index}`, "cbr");
+  // Capped CRF is where most of the bandwidth saving is: a static slide costs
+  // a few hundred kbps instead of the whole rung, while motion can still use
+  // up to maxrate. Every viewer downloads every bit, so the saving is paid
+  // back per viewer rather than once.
+  switch (encoder) {
+    case "libx264":
+      // `zerolatency` disables lookahead and B-frame buffering; it costs a few
+      // percent of compression efficiency and removes ~1s of encoder delay,
+      // which is the right trade for a live class.
+      args.push(...opt("preset", preset), ...opt("tune", "zerolatency"));
+      args.push(...(capped ? opt("crf", quality) : opt("b", nominal)));
+      break;
+    case "h264_nvenc":
+      args.push(...opt("preset", "p4"), ...opt("tune", "ll"));
+      args.push(
+        ...(capped
+          ? [...opt("rc", "vbr"), ...opt("cq", quality), ...opt("b", 0)]
+          : [...opt("rc", "cbr"), ...opt("b", nominal)]),
+      );
+      break;
+    case "h264_qsv":
+      // A quality target plus a maxrate above the nominal rate makes ffmpeg
+      // pick QSV's QVBR mode -- the hardware counterpart of capped CRF.
+      args.push(...opt("preset", "veryfast"), ...opt("b", nominal));
+      if (capped) args.push(...opt("global_quality", quality));
+      break;
+    case "h264_vaapi":
+      // Not every VAAPI driver implements QVBR (AMD's does not), so VBR is
+      // the portable approximation. Intel hardware should prefer h264_qsv.
+      args.push(...opt("rc_mode", capped ? "VBR" : "CBR"), ...opt("b", nominal));
+      break;
   }
 
   return args;
 }
 
+/**
+ * Filter tail that hands each rendition's frames to the encoder in the form
+ * it accepts. Decode and scale stay in software for every backend: they are
+ * cheap next to encoding, and it keeps one filter graph for all of them.
+ */
+function uploadFilter(encoder: VideoEncoder): string {
+  if (encoder === "h264_vaapi") return ",format=nv12,hwupload";
+  if (encoder === "h264_qsv") return ",format=nv12";
+  return "";
+}
+
 export function buildFfmpegArgs(options: LadderOptions): string[] {
-  const { source, segmentSeconds } = options;
+  const { source, segmentSeconds, fps, encoder } = options;
   const renditions = options.renditions;
-  const gop = Math.max(1, Math.round(source.fps * segmentSeconds));
+  const gop = Math.max(1, Math.round(fps * segmentSeconds));
 
   const args: string[] = [
     "-hide_banner",
@@ -162,6 +230,7 @@ export function buildFfmpegArgs(options: LadderOptions): string[] {
     "tcp",
     "-fflags",
     "+genpts",
+    ...(encoder === "h264_vaapi" ? ["-vaapi_device", options.hwDevice] : []),
     "-i",
     options.inputUrl,
   ];
@@ -183,12 +252,18 @@ export function buildFfmpegArgs(options: LadderOptions): string[] {
   // branch for poster thumbnails. A filtergraph input may only be consumed
   // once, so every branch has to come out of this single split.
   const branches = renditions.map((_, index) => `[v${index}]`).join("");
-  const filters = [`[0:v]split=${renditions.length + 1}${branches}[vthumbsrc]`];
+  // Frame-rate reduction goes before the split, so it happens once.
+  const decimate = fps < source.fps ? `fps=${fps},` : "";
+  const filters = [
+    `[0:v]${decimate}split=${renditions.length + 1}${branches}[vthumbsrc]`,
+  ];
 
   // `-2` keeps the source aspect ratio while forcing an even width, which
   // H.264's chroma subsampling requires.
   renditions.forEach((rendition, index) => {
-    filters.push(`[v${index}]scale=-2:${rendition.height}[v${index}out]`);
+    filters.push(
+      `[v${index}]scale=-2:${rendition.height}${uploadFilter(encoder)}[v${index}out]`,
+    );
   });
 
   filters.push(
@@ -237,8 +312,16 @@ export function buildFfmpegArgs(options: LadderOptions): string[] {
     // `temp_file` writes to a .tmp then renames, so nginx can never serve a
     // half-written segment. `program_date_time` gives the player a wall-clock
     // anchor, which the latency readout in the UI uses.
+    //
+    // `append_list` and `omit_endlist` are what let a class survive its
+    // publisher dropping out. ffmpeg is restarted when the source returns;
+    // with `append_list` the new process continues the segment numbering and
+    // marks an EXT-X-DISCONTINUITY instead of starting again at seg_000000
+    // and overwriting the class so far. `omit_endlist` stops the exiting
+    // process from ending the live playlist, which players would take as the
+    // class being over. The replay gets its ENDLIST from the VOD playlist.
     "-hls_flags",
-    "independent_segments+temp_file+program_date_time",
+    "independent_segments+temp_file+program_date_time+append_list+omit_endlist",
     "-hls_segment_type",
     "mpegts",
     "-hls_key_info_file",
@@ -251,7 +334,9 @@ export function buildFfmpegArgs(options: LadderOptions): string[] {
   );
 
   // Thumbnails: a second output, written unencrypted, used only to pick a
-  // poster frame for the recording.
+  // poster frame for the recording. Named by wall-clock second rather than a
+  // counter, so a restarted ffmpeg cannot overwrite earlier frames and the
+  // names still sort chronologically.
   args.push(
     "-map",
     "[thumb]",
@@ -260,10 +345,10 @@ export function buildFfmpegArgs(options: LadderOptions): string[] {
     "-f",
     "image2",
     "-strftime",
-    "0",
+    "1",
     "-update",
     "0",
-    `${options.thumbnailDir}/thumb_%05d.jpg`,
+    `${options.thumbnailDir}/thumb_%s.jpg`,
   );
 
   return args;

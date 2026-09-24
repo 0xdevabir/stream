@@ -19,6 +19,7 @@ import {
   buildKeyInfo,
   deriveIv,
   buildMasterPlaylist,
+  outputFps,
   selectRenditions,
 } from "./ladder";
 import { logger } from "./logger";
@@ -52,9 +53,23 @@ export class StreamSession {
   private recorder: VodRecorder | null = null;
   private renditions: Rendition[] = [];
   private source: SourceInfo | null = null;
+  /** The encoded frame rate, which the playlists and replay must agree on. */
+  private get fps(): number {
+    return outputFps(this.source ?? { fps: 30 }, env.MAX_FPS);
+  }
   private recordingId: string | null = null;
   /** Consecutive rapid ffmpeg failures; reset once an encode proves stable. */
   private restarts = 0;
+  private restartTimer: NodeJS.Timeout | null = null;
+  private inputUrl = "";
+  /**
+   * True while the publisher is away. The class stays open -- same session,
+   * same recording -- but there is nothing to encode, so ffmpeg is parked
+   * rather than left to crash-loop against an empty path.
+   */
+  private paused = false;
+  /** Resolves once the ffmpeg being parked has flushed and exited. */
+  private parking: Promise<void> = Promise.resolve();
 
   private readonly log;
 
@@ -66,6 +81,47 @@ export class StreamSession {
     return this.state === "starting" || this.state === "running";
   }
 
+  isStopped(): boolean {
+    return this.state === "stopped";
+  }
+
+  /**
+   * The publisher dropped (network blip, OBS reconnecting, a browser redial).
+   *
+   * Previously ffmpeg was simply left to exit and respawn against a path with
+   * nothing on it. Every one of those instant failures counted towards the
+   * crash-loop limit, so a gap of about a minute exhausted it, the session
+   * gave up, and the class ended even though the instructor came back.
+   */
+  sourceLost(): void {
+    if (this.state !== "running" || this.paused) return;
+    this.paused = true;
+    this.clearRestartTimer();
+    this.parking = this.ffmpeg?.stop() ?? Promise.resolve();
+  }
+
+  /** The publisher is back within the grace period: carry on where we left off. */
+  sourceReturned(): void {
+    if (this.state !== "running" || !this.paused) return;
+    this.paused = false;
+    this.restarts = 0;
+    this.clearRestartTimer();
+    this.log.info("publisher returned; resuming encode");
+
+    // Two ffmpeg processes appending to one playlist would corrupt it, so the
+    // parked one must be fully gone first.
+    void this.parking.then(() => {
+      if (this.state === "running" && !this.paused) this.spawn(this.inputUrl);
+    });
+  }
+
+  private clearRestartTimer(): void {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+  }
+
   async start(): Promise<boolean> {
     const config = await api.getEncodeConfig(this.streamId);
     if (!config) {
@@ -75,6 +131,7 @@ export class StreamSession {
     }
 
     const inputUrl = env.rtspUrl(this.streamId);
+    this.inputUrl = inputUrl;
 
     const source = await probeSource(inputUrl);
     if (!source) {
@@ -154,7 +211,7 @@ export class StreamSession {
   private async writeMasterPlaylist(): Promise<void> {
     await writeFile(
       liveMasterPath(env.MEDIA_ROOT, this.streamId),
-      buildMasterPlaylist(this.renditions, { fps: this.source?.fps ?? 30 }),
+      buildMasterPlaylist(this.renditions, { fps: this.fps }),
       "utf8",
     );
   }
@@ -169,7 +226,11 @@ export class StreamSession {
       listSize: env.HLS_LIST_SIZE,
       encoder: env.VIDEO_ENCODER,
       preset: env.X264_PRESET,
+      rateControl: env.RATE_CONTROL,
+      quality: env.VIDEO_QUALITY,
+      hwDevice: env.HW_DEVICE,
       source: this.source!,
+      fps: this.fps,
       thumbnailDir: join(liveDir(env.MEDIA_ROOT, this.streamId), "thumbs"),
       thumbnailIntervalSeconds: THUMBNAIL_INTERVAL_SECONDS,
     });
@@ -178,7 +239,8 @@ export class StreamSession {
     this.ffmpeg = spawnFfmpeg(args, this.streamId);
 
     void this.ffmpeg.done.then((code) => {
-      if (this.state !== "running") return;
+      // A parked encoder exiting is expected, not a failure.
+      if (this.state !== "running" || this.paused) return;
 
       // An encode that ran for a good while and *then* exited is a fresh
       // incident, not a continuing failure. Counting restarts cumulatively
@@ -195,8 +257,9 @@ export class StreamSession {
           { code, attempt: this.restarts, retryInMs: delay },
           "ffmpeg exited; restarting",
         );
-        setTimeout(() => {
-          if (this.state === "running") this.spawn(inputUrl);
+        this.restartTimer = setTimeout(() => {
+          this.restartTimer = null;
+          if (this.state === "running" && !this.paused) this.spawn(inputUrl);
         }, delay);
       } else {
         this.log.error(
@@ -218,6 +281,7 @@ export class StreamSession {
   async stop(): Promise<void> {
     if (this.state === "stopping" || this.state === "stopped") return;
     this.state = "stopping";
+    this.clearRestartTimer();
 
     this.log.info("stopping encode");
     await this.ffmpeg?.stop();
@@ -230,7 +294,7 @@ export class StreamSession {
         recordingId: this.recordingId,
         renditions: this.renditions,
         recorder: this.recorder,
-        fps: this.source?.fps ?? 30,
+        fps: this.fps,
       });
 
       await reportFinalized(this.recordingId, result);

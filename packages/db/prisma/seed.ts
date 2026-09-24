@@ -1,8 +1,8 @@
 /**
  * Development seed.
  *
- * Creates one organization, an instructor, three students, a course, and two
- * classes -- one scheduled for tomorrow and one ready to go live right now.
+ * Creates one organization, an instructor (streamer), five students, a course,
+ * and two classes -- one scheduled for tomorrow and one ready to go live now.
  *
  * The smoke-test class uses a fixed stream key so `scripts/smoke-stream.sh`
  * can push a test pattern without a human copying credentials around. Every
@@ -99,6 +99,8 @@ async function main() {
     upsertUser("student1@example.com", "Rin Takahashi", "STUDENT"),
     upsertUser("student2@example.com", "Diego Marchetti", "STUDENT"),
     upsertUser("student3@example.com", "Priya Raghunathan", "STUDENT"),
+    upsertUser("student4@example.com", "Noah Okonkwo", "STUDENT"),
+    upsertUser("student5@example.com", "Sofia Lindqvist", "STUDENT"),
   ]);
 
   const course = await prisma.course.upsert({
@@ -200,7 +202,11 @@ async function main() {
     organization: { id: org.id, slug: org.slug },
     logins: {
       instructor: { email: "instructor@example.com", password: DEV_PASSWORD },
-      student: { email: "student1@example.com", password: DEV_PASSWORD },
+      streamer: { email: "instructor@example.com", password: DEV_PASSWORD },
+      users: [1, 2, 3, 4, 5].map((n) => ({
+        email: `student${n}@example.com`,
+        password: DEV_PASSWORD,
+      })),
     },
     smokeStream: {
       id: smoke.stream.id,
@@ -217,8 +223,8 @@ async function main() {
   );
 
   console.log("Seeded Northgate Academy");
-  console.log(`  instructor  instructor@example.com / ${DEV_PASSWORD}`);
-  console.log(`  students    student1..3@example.com / ${DEV_PASSWORD}`);
+  console.log(`  streamer  instructor@example.com / ${DEV_PASSWORD}`);
+  console.log(`  users     student1..5@example.com / ${DEV_PASSWORD}`);
   console.log(`  smoke class ${smoke.stream.slug}  (key ${smoke.streamKey})`);
   console.log("  credentials written to .seed-output.json");
 }
@@ -231,3 +237,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

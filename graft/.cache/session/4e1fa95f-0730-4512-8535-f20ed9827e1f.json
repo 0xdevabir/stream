@@ -1,0 +1,13 @@
+{
+  "lastQuery": "you can implement whatevery need",
+  "perAgentQuery": {},
+  "graftReads": 0,
+  "sourceReads": 7,
+  "savedTokens": 0,
+  "injectedPointers": [],
+  "nudges": 0,
+  "inputCostMicros": 187419,
+  "inputTokensBilled": 124233,
+  "lastBillingUuid": "b7508b4b-db17-48c4-a2b9-e77cc0eea71b",
+  "host": "claude-code"
+}

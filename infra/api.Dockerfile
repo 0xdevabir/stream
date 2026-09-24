@@ -16,12 +16,15 @@ WORKDIR /app
 
 # Manifests only, so a source-only change does not invalidate the install layer.
 FROM base AS deps
+COPY infra/docker.npmrc .npmrc
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 COPY apps/api/package.json ./apps/api/
-RUN pnpm install --frozen-lockfile --filter @stream/api... --filter @stream/db...
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store \
+      --filter @stream/api... --filter @stream/db...
 
 FROM deps AS build
 COPY turbo.json ./
@@ -47,3 +50,4 @@ USER node
 EXPOSE 4000
 ENTRYPOINT ["/usr/local/bin/api-entrypoint.sh"]
 CMD ["node", "apps/api/dist/server.js"]
+

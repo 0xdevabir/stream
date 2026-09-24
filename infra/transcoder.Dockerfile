@@ -14,11 +14,14 @@ RUN corepack enable \
 WORKDIR /app
 
 FROM base AS deps
+COPY infra/docker.npmrc .npmrc
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/transcoder/package.json ./apps/transcoder/
-RUN pnpm install --frozen-lockfile --filter @stream/transcoder...
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store \
+      --filter @stream/transcoder...
 
 FROM deps AS build
 COPY turbo.json ./
@@ -42,3 +45,4 @@ COPY --from=build /app/apps/transcoder ./apps/transcoder
 # mounts read-only, and Docker volumes are created root-owned. It listens on
 # no ports and is unreachable from outside the compose network.
 CMD ["node", "apps/transcoder/dist/main.js"]
+

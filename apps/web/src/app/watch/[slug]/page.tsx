@@ -13,6 +13,7 @@ import {
   Button,
   Field,
   Input,
+  Section,
   Spinner,
   StatusBadge,
   ViewerPill,
@@ -207,13 +208,27 @@ function Watch() {
             placeholder={<PreLive status={status} stream={stream} />}
           />
 
-          {stream?.description && (
-            <div className="card p-4">
-              <p className="text-ink-300 text-sm whitespace-pre-wrap">
+          <Section>
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-semibold">{stream?.title ?? "Class"}</h2>
+                {stream?.instructor && (
+                  <p className="text-ink-500 mt-0.5 text-sm">
+                    with {stream.instructor.name}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={status} />
+                {status === "LIVE" && <ViewerPill count={room.viewerCount} />}
+              </div>
+            </div>
+            {stream?.description && (
+              <p className="text-ink-300 border-ink-800 mt-4 border-t pt-4 text-sm whitespace-pre-wrap">
                 {stream.description}
               </p>
-            </div>
-          )}
+            )}
+          </Section>
 
           {status === "ENDED" && grant?.vodUrl === null && (
             <Alert tone="info">
