@@ -21,8 +21,9 @@ import {
 } from "@/components/studio/SourcePanel";
 import { useBroadcast } from "@/components/studio/useBroadcast";
 import { capture, listDevices, type DeviceList } from "@/components/studio/whip";
-import { Alert, Button, Section, Spinner, StatusBadge } from "@/components/ui";
+import { Alert, BackLink, Button, Section, Spinner, StatusBadge } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
+import { classNames } from "@/lib/format";
 
 type IngestInfo = IngestCredentials & { ladder: string[] };
 
@@ -297,9 +298,7 @@ function StudioHeader({
   return (
     <header className="flex flex-wrap items-end gap-x-4 gap-y-3">
       <div className="min-w-0 flex-1">
-        <Link href="/classes" className="text-ink-500 hover:text-ink-100 text-xs font-bold">
-          ← Classes
-        </Link>
+        <BackLink href="/classes">Classes</BackLink>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h1 className="page-title truncate">{stream.title}</h1>
           <StatusBadge status={stream.status} />
@@ -309,7 +308,7 @@ function StudioHeader({
       <div className="flex items-center gap-2">
         <Link href={`/watch/${stream.slug}`} target="_blank">
           <Button variant="ghost" size="sm">
-            Student view ↗
+            Student view
           </Button>
         </Link>
         <Link href={`/classes/${streamId}/manage`}>
@@ -347,8 +346,16 @@ function GoLiveBar({
 
   return (
     <div className="card flex flex-wrap items-center gap-4 px-5 py-4">
-      <div className="min-w-0 flex-1">
-        <p className="text-base font-black">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span
+          className={classNames(
+            "size-2.5 shrink-0 rounded-full transition-colors duration-500",
+            phase === "live" && "bg-live-500 live-dot",
+            (phase === "connecting" || phase === "reconnecting") && "bg-warn-500 animate-pulse",
+            phase === "idle" && (previewing ? "bg-ok-500" : "bg-ink-700"),
+          )}
+        />
+        <p className="text-[17px] font-semibold">
           {phase === "idle" && (previewing ? "Ready" : "Start a preview to go live")}
           {phase === "connecting" && "Connecting…"}
           {phase === "live" && "You are live"}

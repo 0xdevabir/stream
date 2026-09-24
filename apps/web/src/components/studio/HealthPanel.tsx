@@ -54,20 +54,18 @@ export function HealthPanel({
         <Stat label="Watching" value={formatCount(viewers)} />
       </div>
 
-      <div className="border-ink-800 flex flex-wrap items-center gap-2 border-t pt-3">
-        <span className="text-ink-500 text-[10px] font-medium tracking-wider uppercase">
-          Delivering
-        </span>
+      <div className="border-ink-800 flex flex-wrap items-center gap-2 border-t-[0.5px] pt-3">
+        <span className="text-ink-500 text-[13px]">Delivering</span>
         {renditions.map((rendition) => (
           <span
             key={rendition}
-            className="bg-ink-850 text-ink-300 rounded-full px-2 py-0.5 text-[11px]"
+            className="bg-ink-850 text-ink-300 rounded-full px-2.5 py-0.5 text-xs font-medium"
           >
             {rendition}
           </span>
         ))}
         {reconnects > 0 && (
-          <span className="text-ink-500 ml-auto text-xs">
+          <span className="text-ink-500 ml-auto text-[13px]">
             {reconnects} automatic reconnect{reconnects === 1 ? "" : "s"}
           </span>
         )}

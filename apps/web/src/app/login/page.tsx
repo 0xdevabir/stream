@@ -84,11 +84,11 @@ function LoginForm() {
   const anyBusy = busy || demoBusy !== null;
 
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-10">
+    <main className="animate-page-in grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-4 text-center">
-          <Logo className="size-11" />
-          <h1 className="text-3xl font-black">Sign in</h1>
+          <Logo className="size-20 shadow-[0_10px_30px_rgb(0_122_255/0.3)]" />
+          <h1 className="page-title">Sign in</h1>
         </div>
 
         <form onSubmit={submit} className="card space-y-4 p-6">
@@ -118,19 +118,20 @@ function LoginForm() {
             Sign in
           </Button>
 
-          <p className="text-ink-500 text-center text-xs">
-            No account?{" "}
-            <Link href="/register" className="text-brand-400 hover:underline">
-              Create one
-            </Link>
-          </p>
         </form>
+
+        <p className="text-ink-500 mt-5 text-center text-[15px]">
+          No account?{" "}
+          <Link href="/register" className="text-brand-500 font-medium">
+            Create one
+          </Link>
+        </p>
 
         {showDemoLogins && (
           <div className="card mt-4 space-y-3 p-4">
             <div>
-              <p className="text-ink-100 text-sm font-bold">Demo accounts</p>
-              <p className="text-ink-500 mt-0.5 text-xs">
+              <p className="text-ink-100 text-[15px] font-semibold">Demo accounts</p>
+              <p className="text-ink-500 mt-0.5 text-[13px]">
                 Password{" "}
                 <span className="text-ink-300 font-mono">{DEMO_PASSWORD}</span>
               </p>
@@ -139,7 +140,6 @@ function LoginForm() {
             <Button
               type="button"
               variant="live"
-              size="sm"
               className="w-full"
               disabled={anyBusy}
               loading={demoBusy === DEMO_STREAMER.email}

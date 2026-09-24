@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { ClassCard } from "@/components/ClassCard";
-import { Alert, Button, EmptyState, Spinner } from "@/components/ui";
+import { Alert, Button, EmptyState, SegmentedControl, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { classNames } from "@/lib/format";
 import { canTeach, useSession } from "@/lib/session";
@@ -14,7 +14,7 @@ type Filter = "all" | "LIVE" | "SCHEDULED" | "ENDED";
 
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: "all", label: "All" },
-  { value: "LIVE", label: "Live now" },
+  { value: "LIVE", label: "Live" },
   { value: "SCHEDULED", label: "Upcoming" },
   { value: "ENDED", label: "Past" },
 ];
@@ -71,38 +71,29 @@ export default function ClassesPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-end gap-3">
-        <h1 className="page-title mr-auto">Classes</h1>
-
-        <div className="bg-ink-900 border-ink-800 flex max-w-full overflow-x-auto rounded-full border p-1">
-          {FILTERS.map((option) => (
+      <header className="space-y-4">
+        <h1 className="page-title">Classes</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedControl
+            value={filter}
+            onChange={setFilter}
+            options={FILTERS}
+            className="w-full sm:w-auto sm:min-w-[340px]"
+          />
+          {teaches && (
             <button
-              key={option.value}
               type="button"
-              onClick={() => setFilter(option.value)}
+              aria-pressed={mineOnly}
+              onClick={() => setMineOnly((value) => !value)}
               className={classNames(
-                "rounded-full px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors",
-                filter === option.value
-                  ? "bg-brand-500/20 text-ink-100"
-                  : "text-ink-500 hover:text-ink-300",
+                "pressable h-8 rounded-full px-3.5 text-[13px] font-semibold transition-colors",
+                mineOnly ? "bg-beige text-on-brand" : "bg-ink-850 text-ink-300",
               )}
             >
-              {option.label}
+              Mine only
             </button>
-          ))}
+          )}
         </div>
-
-        {teaches && (
-          <label className="text-ink-500 hover:text-ink-300 flex cursor-pointer items-center gap-2 text-xs font-bold">
-            <input
-              type="checkbox"
-              checked={mineOnly}
-              onChange={(event) => setMineOnly(event.target.checked)}
-              className="accent-brand-500 size-3.5"
-            />
-            Mine only
-          </label>
-        )}
       </header>
 
       {error && <Alert>{error}</Alert>}
@@ -130,13 +121,12 @@ export default function ClassesPage() {
       ) : (
         <>
           {live.length > 0 && (
-            <section className="space-y-4">
-              <h2 className="text-ink-500 text-[11px] font-bold tracking-[0.14em] uppercase">
-                Live now
-              </h2>
+            <section className="space-y-3">
+              <h2 className="px-1 text-[22px] font-bold">Live now</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {live.map((stream) => (
+                {live.map((stream, index) => (
                   <ClassCard
+                    index={index}
                     key={stream.id}
                     stream={stream}
                     manageable={teaches && stream.instructor.id === user?.id}
@@ -147,15 +137,12 @@ export default function ClassesPage() {
           )}
 
           {rest.length > 0 && (
-            <section className="space-y-4">
-              {live.length > 0 && (
-                <h2 className="text-ink-500 text-[11px] font-bold tracking-[0.14em] uppercase">
-                  All classes
-                </h2>
-              )}
+            <section className="space-y-3">
+              {live.length > 0 && <h2 className="px-1 text-[22px] font-bold">All classes</h2>}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {rest.map((stream) => (
+                {rest.map((stream, index) => (
                   <ClassCard
+                    index={index}
                     key={stream.id}
                     stream={stream}
                     manageable={teaches && stream.instructor.id === user?.id}

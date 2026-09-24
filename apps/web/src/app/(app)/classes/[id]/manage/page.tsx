@@ -5,15 +5,18 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { useConfirm } from "@/components/dialog";
 import { ClassForm, type ClassFormValues } from "@/components/ClassForm";
 import { ShareLinkPanel } from "@/components/IngestPanel";
 import {
   Alert,
+  BackLink,
   Button,
   EmptyState,
   Field,
   Input,
   Section,
+  SegmentedControl,
   Spinner,
   Stat,
   StatusBadge,
@@ -45,6 +48,7 @@ type Tab = "settings" | "students" | "analytics";
 export default function ManageClassPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const confirm = useConfirm();
   const streamId = params.id;
 
   const [tab, setTab] = useState<Tab>("settings");
@@ -113,9 +117,14 @@ export default function ManageClassPage() {
   };
 
   const cancelClass = async () => {
-    if (!confirm("Cancel this class? Students will no longer see it as upcoming.")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Cancel this class?",
+      message: "Students will no longer see it as upcoming.",
+      confirmLabel: "Cancel Class",
+      cancelLabel: "Keep",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.del(`/v1/streams/${streamId}`);
       router.push("/classes");
@@ -134,36 +143,30 @@ export default function ManageClassPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <Link href="/classes" className="text-ink-500 hover:text-ink-100 text-sm">
-          ← Classes
-        </Link>
-        <h1 className="page-title">{stream.title}</h1>
-        <StatusBadge status={stream.status} />
-        <Link href={`/classes/${streamId}/studio`} className="ml-auto">
-          <Button size="sm">
-            {stream.status === "LIVE" ? "Control room" : "Go live"}
-          </Button>
-        </Link>
+      <header className="space-y-2">
+        <div className="flex items-center gap-3">
+          <BackLink href="/classes">Classes</BackLink>
+          <Link href={`/classes/${streamId}/studio`} className="ml-auto">
+            <Button size="sm">
+              {stream.status === "LIVE" ? "Control room" : "Go live"}
+            </Button>
+          </Link>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="page-title min-w-0">{stream.title}</h1>
+          <StatusBadge status={stream.status} />
+        </div>
       </header>
 
-      <nav className="border-ink-800 flex gap-1 border-b">
-        {(["settings", "students", "analytics"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => setTab(option)}
-            className={classNames(
-              "-mb-px border-b-2 px-3 py-2 text-sm capitalize transition-colors",
-              tab === option
-                ? "border-brand-500 text-ink-100"
-                : "text-ink-500 hover:text-ink-300 border-transparent",
-            )}
-          >
-            {option}
-          </button>
-        ))}
-      </nav>
+      <SegmentedControl
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "settings", label: "Settings" },
+          { value: "students", label: "Students" },
+          { value: "analytics", label: "Analytics" },
+        ]}
+      />
 
       {notice && <Alert tone="success">{notice}</Alert>}
 
@@ -191,7 +194,6 @@ export default function ManageClassPage() {
           {stream.status !== "CANCELLED" && (
             <Section
               title="Danger zone"
-              className="border-live-500/30"
               aside={
                 <Button
                   variant="danger"
@@ -310,17 +312,17 @@ function Students({ streamId }: { streamId: string }) {
         />
       ) : (
         <Section title={`Enrolled (${rows.length})`} bodyClassName="p-0">
-        <ul className="divide-ink-800 divide-y">
+        <ul className="divide-ink-800 divide-y-[0.5px]">
           {rows.map((row) => (
-            <li key={row.id} className="flex items-center gap-3 px-4 py-2.5">
+            <li key={row.id} className="animate-fade-in flex items-center gap-3 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{row.name}</p>
-                <p className="text-ink-500 truncate text-xs">{row.email}</p>
+                <p className="truncate text-[15px]">{row.name}</p>
+                <p className="text-ink-500 truncate text-[13px]">{row.email}</p>
               </div>
               <button
                 type="button"
                 onClick={() => void remove(row.id)}
-                className="text-ink-500 hover:text-live-500 text-xs"
+                className="text-live-500 text-[15px] transition-opacity active:opacity-50"
               >
                 Remove
               </button>

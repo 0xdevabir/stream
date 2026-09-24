@@ -29,7 +29,7 @@ export function IngestPanel({
 
   return (
     <div className="space-y-4">
-      <p className="text-ink-500 text-xs">
+      <p className="text-ink-500 text-[13px]">
         OBS → Settings → Stream → Custom. Keyframe interval 1s.
       </p>
 
@@ -41,11 +41,11 @@ export function IngestPanel({
           value={ingest.rtmp.streamKey}
           masked={!revealed}
         />
-        <div className="mt-1.5 flex gap-3">
+        <div className="mt-2 ml-1 flex gap-4">
           <button
             type="button"
             onClick={() => setRevealed((value) => !value)}
-            className="text-ink-500 hover:text-ink-100 text-xs"
+            className="text-brand-500 text-[13px] font-medium transition-opacity active:opacity-50"
           >
             {revealed ? "Hide" : "Reveal"}
           </button>
@@ -54,7 +54,7 @@ export function IngestPanel({
               type="button"
               onClick={onRotate}
               disabled={rotating}
-              className="text-ink-500 hover:text-live-500 text-xs disabled:opacity-50"
+              className="text-live-500 text-[13px] font-medium transition-opacity active:opacity-50 disabled:opacity-50"
             >
               {rotating ? "Rotating…" : "Rotate key"}
             </button>
@@ -62,11 +62,14 @@ export function IngestPanel({
         </div>
       </div>
 
-      <details className="text-ink-500 text-xs">
-        <summary className="hover:text-ink-300 cursor-pointer">
+      <details className="group/srt">
+        <summary className="text-brand-500 ml-1 flex cursor-pointer list-none items-center gap-1 text-[13px] font-medium [&::-webkit-details-marker]:hidden">
+          <svg viewBox="0 0 12 12" className="size-2.5 transition-transform duration-300 group-open/srt:rotate-90" fill="none" aria-hidden>
+            <path d="m4 2 4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           SRT
         </summary>
-        <div className="pt-3">
+        <div className="animate-fade-in pt-3">
           <CopyField label="SRT URL" value={ingest.srt.url} masked={!revealed} />
         </div>
       </details>
@@ -95,7 +98,7 @@ export function ShareLinkPanel({
     <div className="space-y-2">
       <CopyField label="Student link" value={url} />
       {accessMode === "LINK" && (
-        <p className="text-ink-500 text-xs">Anyone with this link can watch.</p>
+        <p className="text-ink-500 ml-1 text-[13px]">Anyone with this link can watch.</p>
       )}
     </div>
   );
@@ -103,9 +106,9 @@ export function ShareLinkPanel({
 
 export function GoLiveHint({ onOpenStudio }: { onOpenStudio: () => void }) {
   return (
-    <div className="border-brand-500/30 bg-brand-500/5 flex flex-wrap items-center gap-3 rounded-2xl border p-4">
+    <div className="bg-brand-500/10 flex flex-wrap items-center gap-3 rounded-[22px] p-4 pl-5">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold">Go live from your browser</p>
+        <p className="text-[15px] font-semibold">Go live from your browser</p>
       </div>
       <Button onClick={onOpenStudio}>Open studio</Button>
     </div>

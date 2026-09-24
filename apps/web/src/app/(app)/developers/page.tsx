@@ -11,6 +11,7 @@ import {
 } from "@stream/shared";
 import { useCallback, useEffect, useState } from "react";
 
+import { useConfirm } from "@/components/dialog";
 import { StreamsConsole } from "@/components/developer/StreamsConsole";
 import {
   Alert,
@@ -21,6 +22,7 @@ import {
   Field,
   Input,
   Section,
+  SegmentedControl,
   Spinner,
 } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
@@ -61,31 +63,25 @@ function Console() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end gap-3">
-        <h1 className="page-title mr-auto">Developers</h1>
-        <div className="bg-ink-900 border-ink-800 flex max-w-full overflow-x-auto rounded-full border p-1">
-          {TABS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setTab(option.value)}
-              className={classNames(
-                "rounded-full px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors",
-                tab === option.value
-                  ? "bg-brand-500/20 text-ink-100"
-                  : "text-ink-500 hover:text-ink-300",
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
+      <header className="space-y-4">
+        <h1 className="page-title">Developers</h1>
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <SegmentedControl
+            value={tab}
+            onChange={setTab}
+            options={[...TABS]}
+            className="min-w-[420px] sm:w-[480px]"
+          />
         </div>
       </header>
+
+      <div key={tab} className="animate-fade-in">
 
       {tab === "streams" && <StreamsConsole />}
       {tab === "keys" && <ApiKeys />}
       {tab === "webhooks" && <Webhooks />}
       {tab === "quickstart" && <Quickstart />}
+      </div>
     </div>
   );
 }
@@ -98,6 +94,7 @@ function ApiKeys() {
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedApiKey | null>(null);
+  const confirm = useConfirm();
 
   const load = useCallback(() => {
     api
@@ -124,9 +121,13 @@ function ApiKeys() {
   }
 
   async function revoke(key: ApiKeySummary) {
-    if (!window.confirm(`Revoke "${key.name}"? Anything using it stops working within 30 seconds.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Revoke “${key.name}”?`,
+      message: "Anything using it stops working within 30 seconds.",
+      confirmLabel: "Revoke",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await api.del(`/v1/developer/api-keys/${key.id}`);
       load();
@@ -215,6 +216,7 @@ function Webhooks() {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedWebhook | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const load = useCallback(() => {
     api
@@ -292,7 +294,7 @@ function Webhooks() {
           </Field>
           <div>
             <span className="label">Events (none selected means all)</span>
-            <div className="mt-1 grid gap-2 sm:grid-cols-2">
+            <div className="bg-ink-850/60 grid gap-x-6 rounded-2xl px-4 py-1 sm:grid-cols-2 [&>label]:py-2">
               {WEBHOOK_EVENT_TYPES.map((type) => (
                 <Checkbox
                   key={type}
@@ -369,8 +371,14 @@ function Webhooks() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => {
-                      if (window.confirm(`Delete the endpoint ${endpoint.url}?`)) {
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: "Delete endpoint?",
+                        message: endpoint.url,
+                        confirmLabel: "Delete",
+                        destructive: true,
+                      });
+                      if (ok) {
                         void act(
                           () => api.del(`/v1/developer/webhooks/${endpoint.id}`),
                           "Could not delete the endpoint",
@@ -419,17 +427,17 @@ function Deliveries({ endpointId }: { endpointId: string }) {
     <table className="mt-2 w-full text-xs">
       <tbody>
         {items.map((delivery) => (
-          <tr key={delivery.id} className="border-ink-850 border-t">
+          <tr key={delivery.id} className="border-ink-800 animate-fade-in border-t-[0.5px]">
             <td className="py-1.5 pr-2">
               <span
                 className={classNames(
-                  "rounded px-1.5 py-0.5",
-                  delivery.status === "SUCCEEDED" && "bg-emerald-500/15 text-emerald-300",
-                  delivery.status === "PENDING" && "bg-amber-500/15 text-amber-300",
+                  "rounded-full px-2 py-0.5 font-medium",
+                  delivery.status === "SUCCEEDED" && "bg-ok-500/15 text-ok-500",
+                  delivery.status === "PENDING" && "bg-warn-500/15 text-warn-500",
                   delivery.status === "FAILED" && "bg-live-500/15 text-live-500",
                 )}
               >
-                {delivery.status.toLowerCase()}
+                {delivery.status.charAt(0) + delivery.status.slice(1).toLowerCase()}
               </span>
             </td>
             <td className="py-1.5 pr-2 font-mono">{delivery.eventType}</td>
@@ -489,7 +497,7 @@ curl -X POST ${origin}/v1/streams/<id>/embed-tokens \\
 
   return (
     <Section title="Quickstart" description="Keep the API key on your server.">
-      <pre className="bg-ink-950 border-ink-800 overflow-x-auto rounded-xl border p-3 text-xs leading-relaxed">
+      <pre className="bg-ink-850 overflow-x-auto rounded-2xl p-4 font-mono text-[12px] leading-relaxed">
         {snippet}
       </pre>
     </Section>

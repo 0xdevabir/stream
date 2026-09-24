@@ -376,7 +376,7 @@ export function Player({
   );
 
   return (
-    <div className="group relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
+    <div className="theme-dark group relative aspect-video w-full overflow-hidden rounded-[22px] bg-black">
       <video
         ref={videoRef}
         className="size-full bg-black"
@@ -397,7 +397,7 @@ export function Player({
             setMuted(false);
             void video.play().catch(() => undefined);
           }}
-          className="bg-beige text-ink-950 absolute top-3 left-3 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-lg"
+          className="animate-pop-in absolute top-3 left-3 inline-flex h-8 items-center gap-1.5 rounded-full bg-white/20 px-3.5 text-[13px] font-semibold text-white backdrop-blur-xl backdrop-saturate-150 transition-transform active:scale-95"
         >
           Tap for sound
         </button>
@@ -410,7 +410,7 @@ export function Player({
       )}
 
       {notice && (
-        <div className="bg-ink-950/85 absolute inset-0 grid place-items-center p-6 text-center backdrop-blur-sm">
+        <div className="bg-ink-950/70 animate-fade-in absolute inset-0 grid place-items-center p-6 text-center backdrop-blur-2xl">
           {notice}
         </div>
       )}
@@ -422,7 +422,7 @@ export function Player({
       )}
 
       {error && !notice && (
-        <div className="absolute inset-x-0 top-0 bg-black/80 px-4 py-2 text-center text-sm text-white">
+        <div className="absolute inset-x-0 top-0 bg-black/60 px-4 py-2 text-center text-[13px] text-white backdrop-blur-xl">
           {error}
         </div>
       )}
@@ -431,19 +431,19 @@ export function Player({
         <button
           type="button"
           onClick={jumpToLive}
-          className="bg-live-500 absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs font-bold text-white shadow-lg"
+          className="bg-live-500 animate-pop-in absolute bottom-16 left-1/2 inline-flex h-8 -translate-x-1/2 items-center rounded-full px-4 text-[13px] font-semibold text-white shadow-lg transition-transform active:scale-95"
         >
           Jump to live
         </button>
       )}
 
       {/* Control strip. Fades in on hover/focus so it never covers the lesson. */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end gap-2 bg-gradient-to-b from-black/70 to-transparent p-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-end gap-2 bg-gradient-to-b from-black/50 to-transparent p-3 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100 group-hover:opacity-100">
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
           {canUseWhep && (
             <Button
               size="sm"
-              variant={mode === "whep" ? "live" : "secondary"}
+              variant={mode === "whep" ? "live" : "glass"}
               onClick={() => setMode(mode === "whep" ? "hls" : "whep")}
               title="Sub-second WebRTC playback. Uses more bandwidth and may not work on restricted networks."
             >
@@ -456,7 +456,7 @@ export function Player({
               aria-label="Video quality"
               value={autoLevel ? -1 : currentLevel}
               onChange={(event) => selectLevel(Number(event.target.value))}
-              className="border-ink-700 rounded-full border bg-black/70 px-3 py-1.5 text-xs font-bold text-white"
+              className="h-8 appearance-none rounded-full bg-white/15 px-3.5 text-base font-semibold text-white sm:text-[13px] backdrop-blur-xl backdrop-saturate-150 outline-none"
             >
               <option value={-1}>
                 Auto{autoLevel && currentLevel >= 0
@@ -473,7 +473,7 @@ export function Player({
 
           <Button
             size="sm"
-            variant="secondary"
+            variant="glass"
             onClick={() => setShowStats((value) => !value)}
             aria-pressed={showStats}
           >
@@ -502,7 +502,7 @@ function StatsOverlay({ stats }: { stats: PlayerStats }) {
   ];
 
   return (
-    <dl className="absolute top-14 left-3 w-52 rounded-xl bg-black/80 p-3 font-mono text-[11px] text-white/90 backdrop-blur">
+    <dl className="animate-pop-in absolute top-14 left-3 w-56 rounded-2xl bg-black/50 p-3.5 font-mono text-[11px] text-white/90 backdrop-blur-2xl backdrop-saturate-150">
       {rows.map(([label, value]) => (
         <div key={label} className="flex justify-between gap-3 py-0.5">
           <dt className="text-white/50">{label}</dt>
