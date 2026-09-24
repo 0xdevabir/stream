@@ -101,8 +101,14 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     if (!stream) return reply.code(403).send({ error: "unknown stream" });
 
     if (payload.action === "publish") {
-      if (stream.status === "CANCELLED" || stream.status === "ENDED") {
-        return reply.code(403).send({ error: "class is not open" });
+      // Only a cancelled class is permanently closed. An ENDED one is
+      // deliberately still publishable: the instructor may be resuming after a
+      // dropped connection, or running a second session of the same class.
+      // Refusing here used to make any blip unrecoverable -- the class ended,
+      // and every reconnect attempt was then rejected as "not open".
+      // `beginLive` clears `endedAt` and returns it to LIVE.
+      if (stream.status === "CANCELLED") {
+        return reply.code(403).send({ error: "class is cancelled" });
       }
 
       for (const credential of presented) {

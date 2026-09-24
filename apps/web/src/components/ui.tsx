@@ -133,6 +133,114 @@ export function Checkbox({
   );
 }
 
+// ── Layout ─────────────────────────────────────────────────────────────────
+
+/**
+ * A titled panel. Everything on the studio and manage screens is one of these,
+ * which is what keeps those pages legible as they accumulate controls.
+ */
+export function Section({
+  title,
+  description,
+  aside,
+  children,
+  className,
+  bodyClassName,
+}: {
+  title?: string;
+  description?: string;
+  aside?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  return (
+    <section className={classNames("card overflow-hidden", className)}>
+      {(title || aside) && (
+        <header className="border-ink-800 flex items-start gap-3 border-b px-4 py-3">
+          <div className="min-w-0 flex-1">
+            {title && <h2 className="text-sm font-medium">{title}</h2>}
+            {description && (
+              <p className="text-ink-500 mt-0.5 text-xs">{description}</p>
+            )}
+          </div>
+          {aside && <div className="shrink-0">{aside}</div>}
+        </header>
+      )}
+      <div className={classNames("p-4", bodyClassName)}>{children}</div>
+    </section>
+  );
+}
+
+/** A labelled figure. Used for the live health readouts and analytics. */
+export function Stat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "good" | "warn";
+}) {
+  return (
+    <div>
+      <p className="text-ink-500 text-[10px] font-medium tracking-wider uppercase">
+        {label}
+      </p>
+      <p
+        className={classNames(
+          "mt-0.5 text-lg font-semibold tabular-nums",
+          tone === "good" && "text-emerald-400",
+          tone === "warn" && "text-amber-400",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** Segmented control. Clearer than a select when there are only two choices. */
+export function SegmentedControl<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<{ value: T; label: string; icon?: ReactNode }>;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      role="tablist"
+      className="bg-ink-950 border-ink-800 grid gap-1 rounded-lg border p-1"
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+    >
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="tab"
+          aria-selected={value === option.value}
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
+          className={classNames(
+            "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+            value === option.value
+              ? "bg-ink-800 text-ink-100"
+              : "text-ink-500 hover:text-ink-300",
+          )}
+        >
+          {option.icon}
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Feedback ───────────────────────────────────────────────────────────────
 
 export function Alert({

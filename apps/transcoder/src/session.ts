@@ -27,6 +27,16 @@ import { VodRecorder } from "./vod-recorder";
 
 const THUMBNAIL_INTERVAL_SECONDS = 30;
 
+/**
+ * How long an encode must survive before we consider it healthy and forgive
+ * the earlier failures. Long enough to be past startup, short enough that a
+ * class dropping every couple of minutes still trips the crash-loop guard.
+ */
+const STABLE_ENCODE_MS = 30_000;
+
+/** Consecutive near-instant failures tolerated before abandoning a class. */
+const MAX_RAPID_RESTARTS = 8;
+
 type State = "starting" | "running" | "stopping" | "stopped";
 
 /**
@@ -43,6 +53,7 @@ export class StreamSession {
   private renditions: Rendition[] = [];
   private source: SourceInfo | null = null;
   private recordingId: string | null = null;
+  /** Consecutive rapid ffmpeg failures; reset once an encode proves stable. */
   private restarts = 0;
 
   private readonly log;
@@ -163,22 +174,35 @@ export class StreamSession {
       thumbnailIntervalSeconds: THUMBNAIL_INTERVAL_SECONDS,
     });
 
+    const spawnedAt = Date.now();
     this.ffmpeg = spawnFfmpeg(args, this.streamId);
 
     void this.ffmpeg.done.then((code) => {
       if (this.state !== "running") return;
 
-      // ffmpeg exiting while the publisher is still connected means it
-      // crashed or lost the RTSP pull. Relaunch, but bounded: a source that
-      // consistently kills the encoder must not become a spawn loop.
-      if (this.restarts < 3) {
+      // An encode that ran for a good while and *then* exited is a fresh
+      // incident, not a continuing failure. Counting restarts cumulatively
+      // over a whole class would guarantee that any sufficiently long lecture
+      // eventually hits the cap and gets killed while perfectly healthy.
+      if (Date.now() - spawnedAt >= STABLE_ENCODE_MS) this.restarts = 0;
+
+      // The bound that remains is only against a tight crash loop: a source
+      // ffmpeg cannot read at all must not become a spawn storm.
+      if (this.restarts < MAX_RAPID_RESTARTS) {
         this.restarts += 1;
-        this.log.warn({ code, attempt: this.restarts }, "ffmpeg exited; restarting");
+        const delay = Math.min(1_000 * 2 ** (this.restarts - 1), 15_000);
+        this.log.warn(
+          { code, attempt: this.restarts, retryInMs: delay },
+          "ffmpeg exited; restarting",
+        );
         setTimeout(() => {
           if (this.state === "running") this.spawn(inputUrl);
-        }, 1_000);
+        }, delay);
       } else {
-        this.log.error({ code }, "ffmpeg keeps exiting; giving up on this class");
+        this.log.error(
+          { code },
+          "ffmpeg keeps exiting immediately; giving up on this class",
+        );
         void this.stop();
       }
     });

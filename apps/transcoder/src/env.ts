@@ -35,7 +35,17 @@ const schema = z.object({
   /** How often to ask MediaMTX which paths have a publisher. */
   POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(10_000).default(1_000),
   /** Give a reconnecting encoder this long before tearing the session down. */
-  SOURCE_GRACE_MS: z.coerce.number().int().min(0).max(120_000).default(8_000),
+  /**
+   * How long a class survives with no publisher before it is finalized.
+   *
+   * This is the "did the lecturer's wifi blip, or did the class actually end?"
+   * threshold. Erring short is expensive and irreversible -- it ends the class,
+   * publishes a truncated recording, and the instructor has to start over --
+   * whereas erring long only delays the replay by a few seconds. Hence a
+   * generous default; ending a class deliberately goes through "End class",
+   * which does not wait for this.
+   */
+  SOURCE_GRACE_MS: z.coerce.number().int().min(0).max(600_000).default(45_000),
 
   FFMPEG_PATH: z.string().default("ffmpeg"),
   FFPROBE_PATH: z.string().default("ffprobe"),
