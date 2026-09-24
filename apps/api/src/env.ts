@@ -47,9 +47,13 @@ const schema = z.object({
   MEDIA_ROOT: z.string().default("/media"),
   LADDER: z.string().default("1080p,720p,480p,360p"),
 
-  /** What instructors paste into OBS. */
-  INGEST_RTMP_URL: z.string().default("rtmp://localhost:1935/live"),
-  INGEST_SRT_HOST: z.string().default("localhost"),
+  /**
+   * What instructors paste into OBS. Blank (compose passes "" when unset)
+   * falls back to the public hostname, so a customer is never handed a
+   * localhost URL they cannot reach.
+   */
+  INGEST_RTMP_URL: z.string().optional(),
+  INGEST_SRT_HOST: z.string().optional(),
   INGEST_SRT_PORT: z.coerce.number().int().default(8890),
 
   // ── Object storage ──
@@ -95,8 +99,20 @@ function load() {
     }
   }
 
+  const publicHost = new URL(env.PUBLIC_BASE_URL).hostname;
+  const ingestRtmpUrl = env.INGEST_RTMP_URL || `rtmp://${publicHost}:1935/live`;
+  const ingestSrtHost = env.INGEST_SRT_HOST || publicHost;
+
+  if (env.NODE_ENV === "production" && /localhost|127\.0\.0\.1/.test(ingestRtmpUrl)) {
+    console.warn(
+      `INGEST_RTMP_URL is ${ingestRtmpUrl}; encoders outside this machine cannot reach it.`,
+    );
+  }
+
   return {
     ...env,
+    INGEST_RTMP_URL: ingestRtmpUrl.replace(/\/+$/, ""),
+    INGEST_SRT_HOST: ingestSrtHost,
     isProduction: env.NODE_ENV === "production",
     /** Cookies get the Secure flag only when the origin can actually use it. */
     cookieSecure: env.PUBLIC_BASE_URL.startsWith("https://"),

@@ -29,14 +29,9 @@ export function IngestPanel({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-medium">Stream from OBS or a hardware encoder</h3>
-        <p className="text-ink-500 mt-1 text-xs">
-          In OBS: Settings → Stream → Service &ldquo;Custom&rdquo;, then paste the
-          server and stream key below. Set keyframe interval to 1 second for the
-          lowest latency.
-        </p>
-      </div>
+      <p className="text-ink-500 text-xs">
+        OBS → Settings → Stream → Custom. Keyframe interval 1s.
+      </p>
 
       <CopyField label="RTMP server" value={ingest.rtmp.url} />
 
@@ -69,7 +64,7 @@ export function IngestPanel({
 
       <details className="text-ink-500 text-xs">
         <summary className="hover:text-ink-300 cursor-pointer">
-          SRT (lower latency over lossy networks)
+          SRT
         </summary>
         <div className="pt-3">
           <CopyField label="SRT URL" value={ingest.srt.url} masked={!revealed} />
@@ -100,10 +95,7 @@ export function ShareLinkPanel({
     <div className="space-y-2">
       <CopyField label="Student link" value={url} />
       {accessMode === "LINK" && (
-        <p className="text-ink-500 text-xs">
-          Anyone with this link can watch. Rotate the class to a different
-          access mode to invalidate it.
-        </p>
+        <p className="text-ink-500 text-xs">Anyone with this link can watch.</p>
       )}
     </div>
   );
@@ -111,13 +103,9 @@ export function ShareLinkPanel({
 
 export function GoLiveHint({ onOpenStudio }: { onOpenStudio: () => void }) {
   return (
-    <div className="border-brand-500/30 bg-brand-500/5 flex flex-wrap items-center gap-3 rounded-lg border p-4">
+    <div className="border-brand-500/30 bg-brand-500/5 flex flex-wrap items-center gap-3 rounded-2xl border p-4">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">Prefer one click?</p>
-        <p className="text-ink-500 text-xs">
-          Go live straight from this browser — camera, microphone or screen, no
-          software to install.
-        </p>
+        <p className="text-sm font-bold">Go live from your browser</p>
       </div>
       <Button onClick={onOpenStudio}>Open studio</Button>
     </div>

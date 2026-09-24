@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
       <TopNav />
-      <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 pt-8 pb-16 sm:pt-12">{children}</main>
     </div>
   );
 }
@@ -55,16 +55,16 @@ export function TopNav() {
   const pathname = usePathname();
 
   return (
-    <header className="border-ink-800 bg-ink-950/80 sticky top-0 z-20 border-b backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center gap-1 px-4 py-3">
-        <Link href="/classes" className="mr-4 flex items-center gap-2 font-semibold">
-          <span className="bg-brand-600 grid size-7 place-items-center rounded-lg text-sm">
-            ▶
+    <header className="sticky top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4">
+      <div className="bg-ink-900/70 border-ink-800/80 mx-auto flex h-14 w-full max-w-6xl items-center gap-1 rounded-full border px-2.5 backdrop-blur-md sm:h-16 sm:px-4">
+        <Link href="/classes" className="mr-2 flex items-center gap-2.5 sm:mr-4">
+          <Logo />
+          <span className="hidden text-sm font-black tracking-tight md:inline">
+            {user?.organizationName ?? "Classes"}
           </span>
-          <span className="hidden sm:inline">{user?.organizationName ?? "Classes"}</span>
         </Link>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
           {LINKS.filter(
             (link) =>
               (!link.teachOnly || canTeach(user)) && (!link.adminOnly || isOrgAdmin(user)),
@@ -73,9 +73,9 @@ export function TopNav() {
               key={link.href}
               href={link.href}
               className={classNames(
-                "rounded-lg px-3 py-1.5 text-sm transition-colors",
+                "rounded-full px-3 py-2 text-[13px] font-bold whitespace-nowrap transition-colors sm:px-4",
                 pathname.startsWith(link.href)
-                  ? "bg-ink-850 text-ink-100"
+                  ? "bg-brand-500/20 text-ink-100"
                   : "text-ink-500 hover:text-ink-100",
               )}
             >
@@ -84,39 +84,56 @@ export function TopNav() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {canTeach(user) && (
-            <Button size="sm" onClick={() => (window.location.href = "/classes/new")}>
-              New class
-            </Button>
+            <Link href="/classes/new" className="hidden sm:block">
+              <Button size="sm">New class</Button>
+            </Link>
           )}
           <div className="group relative">
             <button
               type="button"
-              className="bg-ink-800 text-ink-300 grid size-8 place-items-center rounded-full text-xs font-semibold"
-              title={user?.email}
+              className="bg-ink-800 text-ink-100 hover:bg-ink-700 grid size-9 place-items-center rounded-full text-xs font-bold transition-colors"
+              aria-label="Account"
             >
               {initials(user?.name ?? "?")}
             </button>
-            <div className="card invisible absolute right-0 mt-2 w-56 p-2 opacity-0 shadow-xl transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
-              <p className="px-2 py-1 text-sm">{user?.name}</p>
-              <p className="text-ink-500 truncate px-2 pb-2 text-xs">{user?.email}</p>
-              <p className="text-ink-500 border-ink-800 border-t px-2 py-2 text-[11px] tracking-wide uppercase">
-                {user?.role}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start"
-                onClick={() => void signOut()}
-              >
-                Sign out
-              </Button>
+            {/* The padding bridges the gap so the menu survives the pointer crossing it. */}
+            <div className="invisible absolute right-0 pt-2 opacity-0 transition-all group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+              <div className="card w-60 p-2 shadow-2xl shadow-black/50">
+                <p className="px-3 pt-2 text-sm font-bold">{user?.name}</p>
+                <p className="text-ink-500 truncate px-3 pb-3 text-xs">{user?.email}</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => void signOut()}
+                >
+                  Sign out
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </header>
+  );
+}
+
+/** A sage disc with a play notch — the mark used across the app. */
+export function Logo({ className }: { className?: string }) {
+  return (
+    <span
+      className={classNames(
+        "bg-brand-500 text-ink-950 grid size-9 shrink-0 place-items-center rounded-full",
+        className,
+      )}
+      aria-hidden
+    >
+      <svg viewBox="0 0 16 16" className="ml-0.5 size-3.5 fill-current">
+        <path d="M4 2.5v11l9.5-5.5z" />
+      </svg>
+    </span>
   );
 }
 

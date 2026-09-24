@@ -45,7 +45,10 @@ async function tick(): Promise<void> {
     const existing = sessions.get(path.streamId);
     if (existing) {
       if (existing.isRunning()) {
-        if (missingSince.delete(path.streamId)) existing.sourceReturned();
+        if (missingSince.delete(path.streamId)) {
+          existing.sourceReturned();
+          void api.reportSource(path.streamId, true);
+        }
         continue;
       }
 
@@ -102,6 +105,8 @@ async function tick(): Promise<void> {
         "publisher gone; holding the class open",
       );
       session.sourceLost();
+      // Viewers would otherwise sit on a frozen frame with no explanation.
+      void api.reportSource(streamId, false);
       continue;
     }
 

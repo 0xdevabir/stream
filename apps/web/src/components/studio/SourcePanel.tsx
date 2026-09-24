@@ -121,8 +121,7 @@ export function SourcePanel({
 
       {locked && (
         <p className="text-ink-500 text-xs">
-          Source settings are locked while you are on air. Stop the broadcast to
-          change them.
+          Pause to change the source.
         </p>
       )}
     </div>

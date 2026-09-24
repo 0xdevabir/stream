@@ -15,10 +15,10 @@ import { classNames } from "@/lib/format";
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "live";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand-600 hover:bg-brand-500 text-white",
-  secondary: "bg-ink-800 hover:bg-ink-700 text-ink-100",
+  primary: "bg-beige text-ink-950",
+  secondary: "bg-ink-850 hover:bg-ink-800 text-ink-100 border border-ink-800",
   ghost: "bg-transparent hover:bg-ink-850 text-ink-300 hover:text-ink-100",
-  danger: "bg-live-500/90 hover:bg-live-500 text-white",
+  danger: "bg-live-500/15 hover:bg-live-500 text-live-500 hover:text-white",
   live: "bg-live-500 hover:brightness-110 text-white",
 };
 
@@ -40,17 +40,26 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={classNames(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        size === "sm" && "px-2.5 py-1.5 text-xs",
-        size === "md" && "px-4 py-2 text-sm",
-        size === "lg" && "px-5 py-2.5 text-base",
+        "group/btn relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full font-bold transition-all duration-200",
+        "active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
+        size === "sm" && "px-3.5 py-1.5 text-xs",
+        size === "md" && "px-5 py-2.5 text-sm",
+        size === "lg" && "px-6 py-3 text-sm",
         BUTTON_VARIANTS[variant],
         className,
       )}
     >
-      {loading && <Spinner />}
-      {children}
+      {variant === "primary" && (
+        // The sage sweep from the reference sites' call-to-action buttons.
+        <span
+          aria-hidden
+          className="bg-brand-500 absolute inset-0 -translate-x-full rounded-full transition-transform duration-300 ease-out group-enabled/btn:group-hover/btn:translate-x-0"
+        />
+      )}
+      <span className="relative inline-flex items-center gap-2">
+        {loading && <Spinner />}
+        {children}
+      </span>
     </button>
   );
 }
@@ -157,9 +166,9 @@ export function Section({
   return (
     <section className={classNames("card overflow-hidden", className)}>
       {(title || aside) && (
-        <header className="border-ink-800 flex items-start gap-3 border-b px-4 py-3">
+        <header className="border-ink-800 flex items-start gap-3 border-b px-5 py-4">
           <div className="min-w-0 flex-1">
-            {title && <h2 className="text-sm font-medium">{title}</h2>}
+            {title && <h2 className="text-sm font-bold">{title}</h2>}
             {description && (
               <p className="text-ink-500 mt-0.5 text-xs">{description}</p>
             )}
@@ -167,7 +176,7 @@ export function Section({
           {aside && <div className="shrink-0">{aside}</div>}
         </header>
       )}
-      <div className={classNames("p-4", bodyClassName)}>{children}</div>
+      <div className={classNames("p-5", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -184,13 +193,13 @@ export function Stat({
 }) {
   return (
     <div>
-      <p className="text-ink-500 text-[10px] font-medium tracking-wider uppercase">
+      <p className="text-ink-500 text-[10px] font-bold tracking-[0.14em] uppercase">
         {label}
       </p>
       <p
         className={classNames(
-          "mt-0.5 text-lg font-semibold tabular-nums",
-          tone === "good" && "text-emerald-400",
+          "mt-0.5 text-xl font-black tabular-nums",
+          tone === "good" && "text-brand-500",
           tone === "warn" && "text-amber-400",
         )}
       >
@@ -215,7 +224,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       role="tablist"
-      className="bg-ink-950 border-ink-800 grid gap-1 rounded-lg border p-1"
+      className="bg-ink-950 border-ink-800 grid gap-1 rounded-full border p-1"
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
@@ -227,9 +236,9 @@ export function SegmentedControl<T extends string>({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           className={classNames(
-            "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+            "flex items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
             value === option.value
-              ? "bg-ink-800 text-ink-100"
+              ? "bg-brand-500/20 text-ink-100"
               : "text-ink-500 hover:text-ink-300",
           )}
         >
@@ -255,11 +264,11 @@ export function Alert({
       role={tone === "error" ? "alert" : "status"}
       className={classNames(
         // Errors can quote a long URL; wrap it rather than blow out the layout.
-        "overflow-hidden rounded-lg border px-3 py-2 text-sm break-words",
+        "overflow-hidden rounded-xl border px-4 py-2.5 text-sm break-words",
         tone === "error" && "border-live-500/40 bg-live-500/10 text-live-500",
-        tone === "info" && "border-brand-500/40 bg-brand-500/10 text-brand-400",
+        tone === "info" && "border-brand-500/30 bg-brand-500/10 text-brand-400",
         tone === "success" &&
-          "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+          "border-brand-500/40 bg-brand-500/15 text-brand-400",
       )}
     >
       {children}
@@ -277,8 +286,8 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="card flex flex-col items-center gap-3 px-6 py-14 text-center">
-      <h3 className="text-base font-medium">{title}</h3>
+    <div className="card flex flex-col items-center gap-4 px-6 py-20 text-center">
+      <h3 className="text-2xl font-black">{title}</h3>
       <p className="text-ink-500 max-w-sm text-sm">{body}</p>
       {action}
     </div>
@@ -290,7 +299,7 @@ export function EmptyState({
 const STATUS_STYLES: Record<string, string> = {
   LIVE: "bg-live-500 text-white",
   SCHEDULED: "bg-ink-800 text-ink-300",
-  PROCESSING: "bg-amber-500/20 text-amber-400",
+  PROCESSING: "bg-brand-500/15 text-brand-400",
   ENDED: "bg-ink-800 text-ink-500",
   CANCELLED: "bg-ink-800 text-ink-500 line-through",
 };
@@ -299,7 +308,7 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={classNames(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-[0.14em] uppercase",
         STATUS_STYLES[status] ?? "bg-ink-800 text-ink-300",
       )}
     >
@@ -313,7 +322,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function ViewerPill({ count }: { count: number }) {
   return (
-    <span className="bg-ink-850 text-ink-300 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs">
+    <span className="bg-ink-850 text-ink-300 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums">
       <svg viewBox="0 0 16 16" className="size-3.5 fill-current" aria-hidden>
         <path d="M8 9.5c-2.9 0-5.25 1.6-5.25 3.5v.75h10.5V13c0-1.9-2.35-3.5-5.25-3.5ZM8 8a2.75 2.75 0 1 0 0-5.5A2.75 2.75 0 0 0 8 8Z" />
       </svg>

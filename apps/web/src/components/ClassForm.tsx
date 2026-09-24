@@ -186,7 +186,6 @@ export function ClassForm({
           <div className="space-y-3">
             <Checkbox
               label="Record this class"
-              description="The replay is built from the live segments, so recording costs nothing extra."
               checked={values.recordEnabled}
               onChange={(event) => set("recordEnabled", event.target.checked)}
             />
@@ -197,7 +196,6 @@ export function ClassForm({
             />
             <Checkbox
               label="Q&A queue"
-              description="Students ask questions and upvote each other's; you mark them answered."
               checked={values.questionsEnabled}
               onChange={(event) => set("questionsEnabled", event.target.checked)}
             />

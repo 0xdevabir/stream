@@ -11,6 +11,7 @@ import {
 } from "@stream/shared";
 import { useCallback, useEffect, useState } from "react";
 
+import { StreamsConsole } from "@/components/developer/StreamsConsole";
 import {
   Alert,
   Button,
@@ -44,21 +45,47 @@ export default function DevelopersPage() {
     );
   }
 
+  return <Console />;
+}
+
+const TABS = [
+  { value: "streams", label: "Streams" },
+  { value: "keys", label: "API keys" },
+  { value: "webhooks", label: "Webhooks" },
+  { value: "quickstart", label: "Quickstart" },
+] as const;
+type Tab = (typeof TABS)[number]["value"];
+
+function Console() {
+  const [tab, setTab] = useState<Tab>("streams");
+
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold">Developers</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Create classes from your own backend, embed the player in your site,
-          and get notified when classes go live or recordings are ready. See{" "}
-          <code className="text-ink-300">docs/api.md</code> for the full
-          reference.
-        </p>
+      <header className="flex flex-wrap items-end gap-3">
+        <h1 className="page-title mr-auto">Developers</h1>
+        <div className="bg-ink-900 border-ink-800 flex max-w-full overflow-x-auto rounded-full border p-1">
+          {TABS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setTab(option.value)}
+              className={classNames(
+                "rounded-full px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors",
+                tab === option.value
+                  ? "bg-brand-500/20 text-ink-100"
+                  : "text-ink-500 hover:text-ink-300",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </header>
 
-      <ApiKeys />
-      <Webhooks />
-      <Quickstart />
+      {tab === "streams" && <StreamsConsole />}
+      {tab === "keys" && <ApiKeys />}
+      {tab === "webhooks" && <Webhooks />}
+      {tab === "quickstart" && <Quickstart />}
     </div>
   );
 }
@@ -111,7 +138,7 @@ function ApiKeys() {
   return (
     <Section
       title="API keys"
-      description="For server-to-server calls. A key acts as the admin who created it, and stops working if that person stops being an admin."
+      description="Server-side only. Acts as the admin who created it."
     >
       <div className="space-y-4">
         {error && <Alert>{error}</Alert>}
@@ -227,7 +254,7 @@ function Webhooks() {
   return (
     <Section
       title="Webhooks"
-      description="We POST a signed JSON event to your URL when a class goes live, ends, or its recording is ready. Failed deliveries are retried for about a day."
+      description="Signed events for live, ended and recording ready."
     >
       <div className="space-y-4">
         {error && <Alert>{error}</Alert>}
@@ -439,28 +466,30 @@ function Deliveries({ endpointId }: { endpointId: string }) {
 
 function Quickstart() {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const snippet = `# 1. Create a class from your backend
+  const snippet = `# 1. Create a stream from your backend. The response carries
+#    ingest.rtmp.url (OBS "Server") and ingest.rtmp.streamKey (OBS "Stream Key").
 curl -X POST ${origin}/v1/streams \\
   -H "Authorization: Bearer $STREAM_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"title":"Algebra 101","accessMode":"ENROLLED"}'
 
-# 2. When one of your users opens the class page, mint an embed token
+# 2. Start streaming in OBS, then check the encoder is reaching us
+curl ${origin}/v1/streams/<id>/health \\
+  -H "Authorization: Bearer $STREAM_API_KEY"
+
+# 3. When one of your users opens the page, mint an embed token
 curl -X POST ${origin}/v1/streams/<id>/embed-tokens \\
   -H "Authorization: Bearer $STREAM_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"ttlSeconds":7200}'
 
-# 3. Render the returned embedUrl in an iframe
+# 4. Render the returned embedUrl in an iframe
 <iframe src="<embedUrl>" allow="autoplay; fullscreen; picture-in-picture"
         allowfullscreen style="width:100%;aspect-ratio:16/9;border:0"></iframe>`;
 
   return (
-    <Section
-      title="Quickstart"
-      description="Mint embed tokens on your server, never in the browser: the API key must stay secret."
-    >
-      <pre className="bg-ink-950 border-ink-800 overflow-x-auto rounded-lg border p-3 text-xs leading-relaxed">
+    <Section title="Quickstart" description="Keep the API key on your server.">
+      <pre className="bg-ink-950 border-ink-800 overflow-x-auto rounded-xl border p-3 text-xs leading-relaxed">
         {snippet}
       </pre>
     </Section>

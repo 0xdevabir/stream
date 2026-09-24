@@ -26,6 +26,8 @@ export type RoomState = {
   /** Stream status pushed by the server; drives the pre-live / ended screens. */
   status: RoomStatus | null;
   hlsUrl: string | null;
+  /** The class is live but the instructor has stopped sending for now. */
+  paused: boolean;
   error: string | null;
 };
 
@@ -69,6 +71,7 @@ export function useRoom(
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [hlsUrl, setHlsUrl] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const send = useCallback((message: ClientMessage) => {
@@ -148,6 +151,7 @@ export function useRoom(
           setViewerCount(message.viewerCount);
           setCanModerate(message.canModerate);
           setSlowModeSeconds(message.slowModeSeconds);
+          setPaused(message.paused);
           setMessages(message.backlog);
           return;
 
@@ -183,6 +187,12 @@ export function useRoom(
         case "status":
           setStatus(message.status);
           setHlsUrl(message.hlsUrl);
+          // Any transition (back to LIVE, or on to ended) supersedes a pause.
+          setPaused(false);
+          return;
+
+        case "paused":
+          setPaused(message.paused);
           return;
 
         case "slowmode":
@@ -240,6 +250,7 @@ export function useRoom(
     messages,
     status,
     hlsUrl,
+    paused,
     error,
     ...actions,
   };

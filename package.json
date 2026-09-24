@@ -27,8 +27,8 @@
     "smoke:verify": "node scripts/smoke-verify.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.13.4",
-    "turbo": "^2.10.12",
+    "@types/node": "^24.13.6",
+    "turbo": "^2.11.3",
     "typescript": "^5.9.3"
   }
 }

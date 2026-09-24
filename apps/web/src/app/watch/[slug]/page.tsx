@@ -3,17 +3,15 @@
 import type { PlaybackGrant, StreamSummary } from "@stream/shared";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Player, type PlayerStats } from "@/components/player/Player";
 import { ChatPanel } from "@/components/room/ChatPanel";
 import { useRoom } from "@/components/room/useRoom";
 import {
-  Alert,
   Button,
   Field,
   Input,
-  Section,
   Spinner,
   StatusBadge,
   ViewerPill,
@@ -141,6 +139,18 @@ function Watch() {
     if (previous && room.status !== previous) void requestGrant(password || undefined);
   }, [room.status, requestGrant, password]);
 
+  const status = room.status ?? grant?.status ?? "SCHEDULED";
+  const paused = status === "LIVE" && room.paused;
+
+  // hls.js can give up on a playlist that stopped growing during a pause.
+  // Remounting the player when media returns is the reliable way back.
+  const [playerKey, setPlayerKey] = useState(0);
+  const wasPaused = useRef(false);
+  useEffect(() => {
+    if (wasPaused.current && !paused) setPlayerKey((key) => key + 1);
+    wasPaused.current = paused;
+  }, [paused]);
+
   const onQualityChange = useCallback(
     (stats: PlayerStats) => {
       if (!stats.rendition || stats.mode !== "hls") return;
@@ -178,68 +188,67 @@ function Watch() {
     );
   }
 
-  const status = room.status ?? grant?.status ?? "SCHEDULED";
   const hlsUrl = room.hlsUrl ?? grant?.hlsUrl ?? null;
   const showChat = Boolean(grant?.chatEnabled || grant?.questionsEnabled);
+  const title = stream?.title ?? "Class";
 
   return (
     <div className="min-h-dvh">
-      <header className="border-ink-800 bg-ink-950/80 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-4 py-3">
-          <Link href="/classes" className="text-ink-500 hover:text-ink-100 text-sm">
-            ← Classes
+      <header className="sticky top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4">
+        <div className="bg-ink-900/70 border-ink-800/80 mx-auto flex h-14 w-full max-w-[1600px] items-center gap-3 rounded-full border px-2.5 backdrop-blur-md sm:px-3">
+          <Link
+            href="/classes"
+            aria-label="Back to classes"
+            className="bg-ink-800 hover:bg-ink-700 grid size-9 shrink-0 place-items-center rounded-full transition-colors"
+          >
+            <svg viewBox="0 0 16 16" className="size-4 fill-current" aria-hidden>
+              <path d="M10.3 3.3a1 1 0 0 1 0 1.4L7 8l3.3 3.3a1 1 0 1 1-1.4 1.4l-4-4a1 1 0 0 1 0-1.4l4-4a1 1 0 0 1 1.4 0Z" />
+            </svg>
           </Link>
-          <h1 className="truncate text-sm font-medium">
-            {stream?.title ?? "Class"}
-          </h1>
-          <StatusBadge status={status} />
-          {status === "LIVE" && <ViewerPill count={room.viewerCount} />}
+          <h1 className="min-w-0 flex-1 truncate text-sm font-black">{title}</h1>
+          <div className="flex shrink-0 items-center gap-2 pr-1">
+            {paused ? <PausedBadge /> : <StatusBadge status={status} />}
+            {status === "LIVE" && <ViewerPill count={room.viewerCount} />}
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-[1600px] gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-4">
+      <main className="mx-auto grid w-full max-w-[1600px] gap-4 px-3 py-4 sm:px-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-5">
           <Player
+            key={playerKey}
             src={status === "ENDED" ? (grant?.vodUrl ?? null) : hlsUrl}
             live={status === "LIVE"}
             whepUrl={status === "LIVE" ? (grant?.whepUrl ?? null) : null}
             whepToken={grant?.whepToken ?? null}
             onQualityChange={onQualityChange}
-            placeholder={<PreLive status={status} stream={stream} />}
+            placeholder={<Screen status={status} stream={stream} />}
+            notice={
+              paused ? (
+                <ScreenText
+                  icon={<PauseIcon />}
+                  title="Stream paused"
+                  body="It will resume here automatically."
+                />
+              ) : undefined
+            }
           />
 
-          <Section>
-            <div className="flex flex-wrap items-start gap-4">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold">{stream?.title ?? "Class"}</h2>
-                {stream?.instructor && (
-                  <p className="text-ink-500 mt-0.5 text-sm">
-                    with {stream.instructor.name}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={status} />
-                {status === "LIVE" && <ViewerPill count={room.viewerCount} />}
-              </div>
-            </div>
+          <div className="px-1">
+            <h2 className="text-2xl font-black sm:text-3xl">{title}</h2>
+            {stream?.instructor && (
+              <p className="text-ink-500 mt-1 text-sm">{stream.instructor.name}</p>
+            )}
             {stream?.description && (
-              <p className="text-ink-300 border-ink-800 mt-4 border-t pt-4 text-sm whitespace-pre-wrap">
+              <p className="text-ink-300 mt-4 max-w-3xl text-sm leading-relaxed whitespace-pre-wrap">
                 {stream.description}
               </p>
             )}
-          </Section>
-
-          {status === "ENDED" && grant?.vodUrl === null && (
-            <Alert tone="info">
-              This class has ended. The replay is still being processed and will
-              appear in your recordings shortly.
-            </Alert>
-          )}
+          </div>
         </div>
 
         {showChat && (
-          <div className="lg:h-[calc(100dvh-7rem)] lg:sticky lg:top-20">
+          <div className="lg:sticky lg:top-24 lg:h-[calc(100dvh-7rem)]">
             <div className="flex h-[500px] flex-col lg:h-full">
               <ChatPanel
                 room={room}
@@ -255,7 +264,8 @@ function Watch() {
   );
 }
 
-function PreLive({
+/** What the video surface shows when there is nothing to play. */
+function Screen({
   status,
   stream,
 }: {
@@ -263,27 +273,57 @@ function PreLive({
   stream: StreamSummary | null;
 }) {
   if (status === "PROCESSING") {
-    return (
-      <div className="space-y-2">
-        <p className="text-sm">The class has ended.</p>
-        <p className="text-ink-500 text-xs">
-          The replay is being prepared — this usually takes under a minute.
-        </p>
-      </div>
-    );
+    return <ScreenText title="Class ended" body="The replay will be ready shortly." />;
   }
-
+  if (status === "ENDED") {
+    return <ScreenText title="Class ended" />;
+  }
+  if (status === "CANCELLED") {
+    return <ScreenText title="Class cancelled" />;
+  }
   return (
-    <div className="space-y-2">
-      <p className="text-sm">
-        {stream?.scheduledAt
-          ? `Starts ${formatDateTime(stream.scheduledAt)}`
-          : "This class has not started yet."}
-      </p>
-      <p className="text-ink-500 text-xs">
-        This page will start playing on its own when the instructor goes live.
-      </p>
+    <ScreenText
+      title={
+        stream?.scheduledAt ? `Starts ${formatDateTime(stream.scheduledAt)}` : "Starting soon"
+      }
+      body="Plays automatically when it goes live."
+    />
+  );
+}
+
+function ScreenText({
+  icon,
+  title,
+  body,
+}: {
+  icon?: ReactNode;
+  title: string;
+  body?: string;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3">
+      {icon}
+      <p className="text-xl font-black sm:text-3xl">{title}</p>
+      {body && <p className="text-ink-500 text-sm">{body}</p>}
     </div>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <span className="bg-brand-500/20 text-brand-400 grid size-14 place-items-center rounded-full">
+      <svg viewBox="0 0 16 16" className="size-5 fill-current" aria-hidden>
+        <path d="M4 3h3v10H4zM9 3h3v10H9z" />
+      </svg>
+    </span>
+  );
+}
+
+function PausedBadge() {
+  return (
+    <span className="bg-brand-500/20 text-brand-400 inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-[0.14em] uppercase">
+      paused
+    </span>
   );
 }
 
@@ -304,11 +344,11 @@ function Gatekeeper({
 }) {
   return (
     <main className="grid min-h-dvh place-items-center px-4">
-      <div className="card w-full max-w-sm space-y-4 p-6">
+      <div className="card w-full max-w-sm space-y-5 p-7">
         {gate.kind === "password" ? (
           <>
             <div>
-              <h1 className="text-base font-medium">This class is protected</h1>
+              <h1 className="text-2xl font-black">Password required</h1>
               <p className="text-ink-500 mt-1 text-sm">{gate.message}</p>
             </div>
             <form
@@ -316,9 +356,9 @@ function Gatekeeper({
                 event.preventDefault();
                 onSubmit();
               }}
-              className="space-y-3"
+              className="space-y-4"
             >
-              <Field label="Class password">
+              <Field label="Password">
                 <Input
                   type="password"
                   autoFocus
@@ -334,17 +374,21 @@ function Gatekeeper({
           </>
         ) : gate.kind === "signin" ? (
           <>
-            <h1 className="text-base font-medium">Sign in to watch</h1>
-            <p className="text-ink-500 text-sm">{gate.message}</p>
-            <Link href={`/login?next=${encodeURIComponent(`/watch/${slug}`)}`}>
+            <div>
+              <h1 className="text-2xl font-black">Sign in to watch</h1>
+              <p className="text-ink-500 mt-1 text-sm">{gate.message}</p>
+            </div>
+            <Link href={`/login?next=${encodeURIComponent(`/watch/${slug}`)}`} className="block">
               <Button className="w-full">Sign in</Button>
             </Link>
           </>
         ) : (
           <>
-            <h1 className="text-base font-medium">No access</h1>
-            <p className="text-ink-500 text-sm">{gate.message}</p>
-            <Link href="/classes">
+            <div>
+              <h1 className="text-2xl font-black">No access</h1>
+              <p className="text-ink-500 mt-1 text-sm">{gate.message}</p>
+            </div>
+            <Link href="/classes" className="block">
               <Button variant="secondary" className="w-full">
                 Back to classes
               </Button>

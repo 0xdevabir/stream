@@ -81,6 +81,7 @@ export async function wsRoutes(app: FastifyInstance): Promise<void> {
       viewerCount: await presence.count(stream.id),
       canModerate: isModerator,
       slowModeSeconds: stream.slowModeSeconds,
+      paused: stream.status === "LIVE" && (await streams.isPaused(stream.id)),
       backlog: stream.chatEnabled
         ? await chat.listRecent({
             streamId: stream.id,
