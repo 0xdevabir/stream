@@ -70,20 +70,20 @@ export default function ClassesPage() {
   const rest = items.filter((item) => item.status !== "LIVE");
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Classes</h1>
+    <div className="space-y-8">
+      <header className="flex flex-wrap items-end gap-3">
+        <h1 className="page-title mr-auto">Classes</h1>
 
-        <div className="bg-ink-900 border-ink-800 ml-auto flex rounded-lg border p-0.5">
+        <div className="bg-ink-900 border-ink-800 flex max-w-full overflow-x-auto rounded-full border p-1">
           {FILTERS.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => setFilter(option.value)}
               className={classNames(
-                "rounded-md px-3 py-1.5 text-xs transition-colors",
+                "rounded-full px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-colors",
                 filter === option.value
-                  ? "bg-ink-800 text-ink-100"
+                  ? "bg-brand-500/20 text-ink-100"
                   : "text-ink-500 hover:text-ink-300",
               )}
             >
@@ -93,7 +93,7 @@ export default function ClassesPage() {
         </div>
 
         {teaches && (
-          <label className="text-ink-500 flex cursor-pointer items-center gap-2 text-xs">
+          <label className="text-ink-500 hover:text-ink-300 flex cursor-pointer items-center gap-2 text-xs font-bold">
             <input
               type="checkbox"
               checked={mineOnly}
@@ -113,11 +113,11 @@ export default function ClassesPage() {
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          title="Nothing here yet"
+          title="No classes yet"
           body={
             teaches
-              ? "Create a class, then go live from your browser or from OBS."
-              : "Classes you are enrolled in will appear here."
+              ? "Create one and go live from your browser or OBS."
+              : "Your classes will show up here."
           }
           action={
             teaches ? (
@@ -130,11 +130,11 @@ export default function ClassesPage() {
       ) : (
         <>
           {live.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-ink-500 text-xs font-semibold tracking-wide uppercase">
+            <section className="space-y-4">
+              <h2 className="text-ink-500 text-[11px] font-bold tracking-[0.14em] uppercase">
                 Live now
               </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {live.map((stream) => (
                   <ClassCard
                     key={stream.id}
@@ -147,13 +147,13 @@ export default function ClassesPage() {
           )}
 
           {rest.length > 0 && (
-            <section className="space-y-3">
+            <section className="space-y-4">
               {live.length > 0 && (
-                <h2 className="text-ink-500 text-xs font-semibold tracking-wide uppercase">
-                  Everything else
+                <h2 className="text-ink-500 text-[11px] font-bold tracking-[0.14em] uppercase">
+                  All classes
                 </h2>
               )}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {rest.map((stream) => (
                   <ClassCard
                     key={stream.id}

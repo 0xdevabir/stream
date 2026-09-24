@@ -74,6 +74,14 @@ export async function reportOffline(streamId: string): Promise<void> {
   await request(`/internal/streams/${streamId}/offline`, { method: "POST" });
 }
 
+/** Publisher dropped (or returned) while the class is held open. */
+export async function reportSource(streamId: string, present: boolean): Promise<void> {
+  await request(`/internal/streams/${streamId}/source`, {
+    method: "POST",
+    body: JSON.stringify({ present }),
+  });
+}
+
 export async function reportHeartbeat(streamId: string): Promise<void> {
   await request(`/internal/streams/${streamId}/heartbeat`, { method: "POST" });
 }

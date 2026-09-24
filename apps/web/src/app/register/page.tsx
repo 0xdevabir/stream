@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { Logo } from "@/components/AppShell";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -64,9 +65,12 @@ function RegisterForm() {
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <h1 className="mb-6 text-center text-xl font-semibold">
-          {inviteToken ? "Accept your invitation" : "Create an organization"}
-        </h1>
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <Logo className="size-11" />
+          <h1 className="text-3xl font-black">
+            {inviteToken ? "Join your team" : "Create account"}
+          </h1>
+        </div>
 
         <form onSubmit={submit} className="card space-y-4 p-6">
           {error && <Alert>{error}</Alert>}
@@ -97,10 +101,7 @@ function RegisterForm() {
           </Field>
 
           {!inviteToken && (
-            <Field
-              label="Organization"
-              hint="Your school, department or company. You become its owner."
-            >
+            <Field label="Organization">
               <Input
                 required
                 value={form.organizationName}

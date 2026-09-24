@@ -4,7 +4,7 @@ import type { StreamSummary } from "@stream/shared";
 import Link from "next/link";
 
 import { StatusBadge, ViewerPill } from "@/components/ui";
-import { formatDateTime, formatRelative } from "@/lib/format";
+import { classNames, formatDateTime, formatRelative } from "@/lib/format";
 
 export function ClassCard({
   stream,
@@ -19,46 +19,49 @@ export function ClassCard({
     stream.status === "ENDED" && stream.recordingId
       ? `/replay/${stream.recordingId}`
       : `/watch/${stream.slug}`;
+  const live = stream.status === "LIVE";
 
   return (
-    <article className="card hover:border-ink-700 flex flex-col gap-3 p-4 transition-colors">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="mb-1.5 flex flex-wrap items-center gap-2">
-            <StatusBadge status={stream.status} />
-            {stream.status === "LIVE" && <ViewerPill count={stream.viewerCount} />}
-          </div>
-
-          <h3 className="truncate font-medium">
-            <Link href={href} className="hover:underline">
-              {stream.title}
-            </Link>
-          </h3>
-
-          <p className="text-ink-500 mt-0.5 text-xs">
-            {stream.instructor.name}
-            {" · "}
-            {stream.status === "SCHEDULED" && stream.scheduledAt
-              ? `starts ${formatRelative(stream.scheduledAt)}`
-              : stream.status === "LIVE" && stream.startedAt
-                ? `live since ${formatDateTime(stream.startedAt)}`
-                : stream.endedAt
-                  ? `ended ${formatRelative(stream.endedAt)}`
-                  : formatDateTime(stream.scheduledAt)}
-          </p>
-        </div>
+    <article
+      className={classNames(
+        "card group hover:border-ink-700 relative flex flex-col gap-4 p-5 transition-all duration-200 hover:-translate-y-0.5",
+        live && "border-live-500/40 hover:border-live-500/70",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <StatusBadge status={stream.status} />
+        {live && <ViewerPill count={stream.viewerCount} />}
+        <span className="text-ink-500 ml-auto truncate text-xs">
+          {stream.status === "SCHEDULED" && stream.scheduledAt
+            ? formatRelative(stream.scheduledAt)
+            : live && stream.startedAt
+              ? `since ${formatDateTime(stream.startedAt)}`
+              : stream.endedAt
+                ? formatRelative(stream.endedAt)
+                : formatDateTime(stream.scheduledAt)}
+        </span>
       </div>
 
-      {stream.description && (
-        <p className="text-ink-300 line-clamp-2 text-sm">{stream.description}</p>
-      )}
+      <div className="min-w-0">
+        <h3 className="line-clamp-2 text-lg leading-snug font-black">
+          <Link href={href} className="after:absolute after:inset-0">
+            {stream.title}
+          </Link>
+        </h3>
+        <p className="text-ink-500 mt-1 text-sm">{stream.instructor.name}</p>
+      </div>
 
-      <div className="mt-auto flex flex-wrap gap-2 pt-1">
+      <div className="relative mt-auto flex flex-wrap gap-2">
         <Link
           href={href}
-          className="bg-ink-800 hover:bg-ink-700 rounded-lg px-3 py-1.5 text-xs font-medium"
+          className={classNames(
+            "rounded-full px-4 py-2 text-xs font-bold transition-colors",
+            live
+              ? "bg-live-500 text-white hover:brightness-110"
+              : "bg-beige text-ink-950 hover:bg-brand-500",
+          )}
         >
-          {stream.status === "LIVE"
+          {live
             ? "Watch live"
             : stream.status === "ENDED" && stream.recordingId
               ? "Watch replay"
@@ -67,20 +70,20 @@ export function ClassCard({
 
         {manageable && (
           <>
-            <Link
-              href={`/classes/${stream.id}/manage`}
-              className="text-ink-500 hover:text-ink-100 rounded-lg px-3 py-1.5 text-xs font-medium"
-            >
-              Manage
-            </Link>
             {stream.status !== "ENDED" && stream.status !== "CANCELLED" && (
               <Link
                 href={`/classes/${stream.id}/studio`}
-                className="bg-live-500 rounded-lg px-3 py-1.5 text-xs font-medium text-white"
+                className="border-ink-700 hover:border-ink-500 rounded-full border px-4 py-2 text-xs font-bold transition-colors"
               >
-                {stream.status === "LIVE" ? "Control room" : "Go live"}
+                {live ? "Studio" : "Go live"}
               </Link>
             )}
+            <Link
+              href={`/classes/${stream.id}/manage`}
+              className="text-ink-500 hover:text-ink-100 rounded-full px-3 py-2 text-xs font-bold transition-colors"
+            >
+              Manage
+            </Link>
           </>
         )}
       </div>

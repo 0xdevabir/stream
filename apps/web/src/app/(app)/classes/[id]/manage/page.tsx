@@ -138,7 +138,7 @@ export default function ManageClassPage() {
         <Link href="/classes" className="text-ink-500 hover:text-ink-100 text-sm">
           ← Classes
         </Link>
-        <h1 className="text-lg font-semibold">{stream.title}</h1>
+        <h1 className="page-title">{stream.title}</h1>
         <StatusBadge status={stream.status} />
         <Link href={`/classes/${streamId}/studio`} className="ml-auto">
           <Button size="sm">
@@ -169,7 +169,7 @@ export default function ManageClassPage() {
 
       {tab === "settings" && (
         <div className="space-y-5">
-          <Section title="Student link" description="Share this so students can join.">
+          <Section title="Student link">
             <ShareLinkPanel
               slug={stream.slug}
               shareToken={null}
@@ -177,7 +177,7 @@ export default function ManageClassPage() {
             />
           </Section>
 
-          <Section title="Class details" description="Title, schedule, access and interaction.">
+          <Section title="Details">
             <ClassForm
               values={values}
               onChange={setValues}
@@ -206,7 +206,7 @@ export default function ManageClassPage() {
               <p className="text-ink-500 text-xs">
                 {stream.status === "LIVE"
                   ? "End the broadcast before cancelling."
-                  : "Removes the class from upcoming lists. Existing recordings are kept."}
+                  : "Recordings are kept."}
               </p>
             </Section>
           )}
@@ -286,10 +286,7 @@ function Students({ streamId }: { streamId: string }) {
       {error && <Alert>{error}</Alert>}
       {notice && <Alert tone="info">{notice}</Alert>}
 
-      <Section
-        title="Add students"
-        description="They must already be members of your organization."
-      >
+      <Section title="Add students">
         <form onSubmit={add} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1">
             <Field label="Email addresses" hint="Separate with commas, spaces or new lines.">
@@ -370,7 +367,7 @@ function AnalyticsPanel({ streamId }: { streamId: string }) {
 
   return (
     <div className="space-y-5">
-      <Section title="Audience" description="Refreshes every 15 seconds.">
+      <Section title="Audience">
         <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
           <Stat label="Watching now" value={formatCount(data.currentViewers)} tone="good" />
           <Stat label="Peak viewers" value={formatCount(data.peakViewers)} />
@@ -384,7 +381,7 @@ function AnalyticsPanel({ streamId }: { streamId: string }) {
       <Section title="Quality reached">
         {totalQuality === 0 ? (
           <p className="text-ink-500 text-xs">
-            No playback telemetry yet. This fills in as students watch.
+            No data yet.
           </p>
         ) : (
           <ul className="space-y-2">
@@ -406,10 +403,6 @@ function AnalyticsPanel({ streamId }: { streamId: string }) {
             ))}
           </ul>
         )}
-        <p className="text-ink-500 mt-3 text-xs">
-          A ladder skewed low means students are bandwidth-limited, not that the
-          encode is poor.
-        </p>
       </Section>
     </div>
   );

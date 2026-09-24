@@ -266,6 +266,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const { id } = validate.params(streamIdParam, request);
 
     const wentLive = await streams.beginLive(id);
+    await streams.setPaused(id, false);
     const stream = await streams.findStreamBySlugOrId(id);
     if (stream) {
       // Only on a real transition: the transcoder re-reports after an encoder
@@ -289,6 +290,23 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         hlsUrl: urls(stream).hlsUrl,
       });
     }
+
+    return reply.code(204).send();
+  });
+
+  const sourceSchema = z.object({ present: z.boolean() });
+
+  /**
+   * The publisher dropped (or came back) inside the transcoder's grace window.
+   * Without this, viewers stare at a frozen frame until the class times out.
+   */
+  app.post("/streams/:id/source", async (request, reply) => {
+    requireInternalToken(request);
+    const { id } = validate.params(streamIdParam, request);
+    const { present } = validate.body(sourceSchema, request);
+
+    await streams.setPaused(id, !present);
+    await events.publish(id, { t: "paused", paused: !present });
 
     return reply.code(204).send();
   });

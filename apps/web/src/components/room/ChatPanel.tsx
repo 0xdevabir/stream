@@ -124,8 +124,8 @@ export function ChatPanel({
         {visible.length === 0 ? (
           <p className="text-ink-500 py-6 text-center text-xs">
             {tab === "chat"
-              ? "No messages yet. Say hello."
-              : "No questions yet. Ask the first one."}
+              ? "No messages yet"
+              : "No questions yet"}
           </p>
         ) : (
           visible.map((message) => (

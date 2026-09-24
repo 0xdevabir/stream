@@ -45,6 +45,11 @@ export type PlayerProps = {
   playbackToken?: string | null;
   /** Rendered over the video surface when `src` is null. */
   placeholder?: ReactNode;
+  /**
+   * Rendered over the video even while a source is loaded -- e.g. "paused",
+   * when the last frame would otherwise sit frozen with no explanation.
+   */
+  notice?: ReactNode;
   /** Fired on every ABR switch; the watch page forwards it as telemetry. */
   onQualityChange?: (stats: PlayerStats) => void;
   onFatalError?: (message: string) => void;
@@ -94,6 +99,7 @@ export function Player({
   autoPlay = true,
   playbackToken,
   placeholder,
+  notice,
   onQualityChange,
   onFatalError,
 }: PlayerProps) {
@@ -370,18 +376,18 @@ export function Player({
   );
 
   return (
-    <div className="group bg-ink-950 relative aspect-video w-full overflow-hidden rounded-xl">
+    <div className="group relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
       <video
         ref={videoRef}
         className="size-full bg-black"
         playsInline
-        controls={Boolean(src) || mode === "whep"}
+        controls={!notice && (Boolean(src) || mode === "whep")}
         muted={muted}
         onVolumeChange={(event) => setMuted(event.currentTarget.muted)}
         {...(poster ? { poster } : {})}
       />
 
-      {muted && (src || mode === "whep") && (
+      {muted && !notice && (src || mode === "whep") && (
         <button
           type="button"
           onClick={() => {
@@ -391,37 +397,41 @@ export function Player({
             setMuted(false);
             void video.play().catch(() => undefined);
           }}
-          className="absolute top-3 left-3 rounded-full bg-black/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur"
+          className="bg-beige text-ink-950 absolute top-3 left-3 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-lg"
         >
           Tap for sound
         </button>
       )}
 
-      {!src && mode === "hls" && (
-        <div className="absolute inset-0 grid place-items-center bg-black/70 p-6 text-center">
-          {placeholder ?? (
-            <p className="text-ink-300 text-sm">This class has not started yet.</p>
-          )}
+      {!src && mode === "hls" && !notice && (
+        <div className="bg-ink-950 absolute inset-0 grid place-items-center p-6 text-center">
+          {placeholder ?? <p className="text-ink-300 text-sm">Not started yet</p>}
         </div>
       )}
 
-      {buffering && (src || mode === "whep") && (
+      {notice && (
+        <div className="bg-ink-950/85 absolute inset-0 grid place-items-center p-6 text-center backdrop-blur-sm">
+          {notice}
+        </div>
+      )}
+
+      {buffering && !notice && (src || mode === "whep") && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <Spinner className="size-8 text-white/80" />
         </div>
       )}
 
-      {error && (
+      {error && !notice && (
         <div className="absolute inset-x-0 top-0 bg-black/80 px-4 py-2 text-center text-sm text-white">
           {error}
         </div>
       )}
 
-      {behindLive && (
+      {behindLive && !notice && (
         <button
           type="button"
           onClick={jumpToLive}
-          className="bg-live-500 absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-lg"
+          className="bg-live-500 absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full px-4 py-1.5 text-xs font-bold text-white shadow-lg"
         >
           Jump to live
         </button>
@@ -446,7 +456,7 @@ export function Player({
               aria-label="Video quality"
               value={autoLevel ? -1 : currentLevel}
               onChange={(event) => selectLevel(Number(event.target.value))}
-              className="border-ink-700 rounded-lg border bg-black/70 px-2 py-1.5 text-xs text-white"
+              className="border-ink-700 rounded-full border bg-black/70 px-3 py-1.5 text-xs font-bold text-white"
             >
               <option value={-1}>
                 Auto{autoLevel && currentLevel >= 0
@@ -492,7 +502,7 @@ function StatsOverlay({ stats }: { stats: PlayerStats }) {
   ];
 
   return (
-    <dl className="absolute top-14 left-3 w-52 rounded-lg bg-black/80 p-3 font-mono text-[11px] text-white/90">
+    <dl className="absolute top-14 left-3 w-52 rounded-xl bg-black/80 p-3 font-mono text-[11px] text-white/90 backdrop-blur">
       {rows.map(([label, value]) => (
         <div key={label} className="flex justify-between gap-3 py-0.5">
           <dt className="text-white/50">{label}</dt>

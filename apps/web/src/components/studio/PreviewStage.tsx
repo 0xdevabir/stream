@@ -55,10 +55,7 @@ export function PreviewStage({
             <div className="bg-ink-900 text-ink-500 mx-auto mb-3 grid size-12 place-items-center rounded-full text-xl">
               ◉
             </div>
-            <p className="text-ink-300 text-sm">No preview yet</p>
-            <p className="text-ink-500 mt-1 text-xs">
-              Choose a source below, then start the preview.
-            </p>
+            <p className="text-ink-300 text-sm font-bold">No preview</p>
           </div>
         </div>
       )}

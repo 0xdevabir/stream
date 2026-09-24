@@ -78,16 +78,22 @@ export default function ReplayPage() {
 
   return (
     <div className="min-h-dvh">
-      <header className="border-ink-800 bg-ink-950/80 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3">
-          <Link href="/library" className="text-ink-500 hover:text-ink-100 text-sm">
-            ← Recordings
+      <header className="sticky top-0 z-20 px-3 pt-3 sm:px-4 sm:pt-4">
+        <div className="bg-ink-900/70 border-ink-800/80 mx-auto flex h-14 w-full max-w-5xl items-center gap-3 rounded-full border px-2.5 backdrop-blur-md sm:px-3">
+          <Link
+            href="/library"
+            aria-label="Back to recordings"
+            className="bg-ink-800 hover:bg-ink-700 grid size-9 shrink-0 place-items-center rounded-full transition-colors"
+          >
+            <svg viewBox="0 0 16 16" className="size-4 fill-current" aria-hidden>
+              <path d="M10.3 3.3a1 1 0 0 1 0 1.4L7 8l3.3 3.3a1 1 0 1 1-1.4 1.4l-4-4a1 1 0 0 1 0-1.4l4-4a1 1 0 0 1 1.4 0Z" />
+            </svg>
           </Link>
-          <h1 className="truncate text-sm font-medium">{recording.title}</h1>
+          <p className="min-w-0 flex-1 truncate text-sm font-black">{recording.title}</p>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4">
+      <main className="mx-auto w-full max-w-5xl space-y-5 px-3 py-4 sm:px-4">
         <Player
           src={data.vodUrl}
           live={false}
@@ -95,32 +101,27 @@ export default function ReplayPage() {
           autoPlay={false}
         />
 
-        <div className="card flex flex-wrap items-center gap-4 p-4">
+        {recording.status !== "READY" && (
+          <Alert tone="info">Still processing. Reload in a minute.</Alert>
+        )}
+
+        <div className="flex flex-wrap items-end gap-4 px-1">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{recording.title}</p>
-            <p className="text-ink-500 mt-0.5 text-xs">
-              Recorded {formatDateTime(recording.createdAt)}
+            <h1 className="text-2xl font-black sm:text-3xl">{recording.title}</h1>
+            <p className="text-ink-500 mt-1 text-sm">
+              {formatDateTime(recording.createdAt)}
               {recording.durationSeconds !== null &&
                 ` · ${formatClock(recording.durationSeconds)}`}
               {` · ${formatBytes(recording.sizeBytes)}`}
-              {` · ${recording.renditions.join(", ")}`}
             </p>
           </div>
 
           {recording.downloadUrl && (
             <a href={recording.downloadUrl}>
-              <Button variant="secondary" size="sm">
-                Download MP4
-              </Button>
+              <Button variant="secondary">Download</Button>
             </a>
           )}
         </div>
-
-        {recording.status !== "READY" && (
-          <Alert tone="info">
-            This recording is still processing. Reload in a minute.
-          </Alert>
-        )}
       </main>
     </div>
   );

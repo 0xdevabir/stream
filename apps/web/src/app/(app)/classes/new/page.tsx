@@ -62,10 +62,8 @@ export default function NewClassPage() {
     return (
       <div className="mx-auto max-w-xl space-y-6">
         <header>
-          <h1 className="text-xl font-semibold">{created.stream.title}</h1>
-          <p className="text-ink-500 mt-1 text-sm">
-            Your class is ready. Go live now or come back at the scheduled time.
-          </p>
+          <p className="label">Class created</p>
+          <h1 className="page-title">{created.stream.title}</h1>
         </header>
 
         <div className="card space-y-5 p-5">
@@ -85,11 +83,11 @@ export default function NewClassPage() {
             size="lg"
             onClick={() => router.push(`/classes/${created.stream.id}/studio`)}
           >
-            Go live from this browser
+            Go live
           </Button>
           <Link href={`/classes/${created.stream.id}/manage`}>
             <Button variant="secondary" size="lg">
-              Manage students
+              Manage
             </Button>
           </Link>
         </div>
@@ -100,10 +98,7 @@ export default function NewClassPage() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <header>
-        <h1 className="text-xl font-semibold">New class</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Everything here can be changed later.
-        </p>
+        <h1 className="page-title">New class</h1>
       </header>
 
       <ClassForm

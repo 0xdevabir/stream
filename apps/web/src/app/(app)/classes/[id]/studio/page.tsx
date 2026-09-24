@@ -221,7 +221,7 @@ export default function StudioPage() {
           />
 
           <div className="grid gap-5 xl:grid-cols-2">
-            <Section title="Source" description="What you send from this browser.">
+            <Section title="Source">
               <SourcePanel
                 settings={settings}
                 onChange={setSettings}
@@ -233,7 +233,7 @@ export default function StudioPage() {
               />
             </Section>
 
-            <Section title="Broadcast health" description="Live readout of this session.">
+            <Section title="Health">
               <HealthPanel
                 phase={broadcast.phase}
                 elapsed={broadcast.elapsed}
@@ -245,7 +245,7 @@ export default function StudioPage() {
             </Section>
           </div>
 
-          <Section title="Share with students">
+          <Section title="Share">
             <ShareLinkPanel
               slug={stream.slug}
               shareToken={null}
@@ -254,8 +254,7 @@ export default function StudioPage() {
           </Section>
 
           <Section
-            title="Broadcast from OBS instead"
-            description="For multi-camera setups, overlays, or a hardware encoder."
+            title="Stream from OBS"
           >
             <IngestPanel
               ingest={{ rtmp: ingest.rtmp, srt: ingest.srt }}
@@ -265,7 +264,7 @@ export default function StudioPage() {
           </Section>
         </div>
 
-        <aside className="lg:sticky lg:top-20 lg:self-start">
+        <aside className="lg:sticky lg:top-24 lg:self-start">
           <div className="flex h-[560px] flex-col lg:h-[calc(100dvh-7rem)]">
             <ChatPanel
               room={room}
@@ -296,13 +295,13 @@ function StudioHeader({
   onEnd: () => void;
 }) {
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <header className="flex flex-wrap items-end gap-x-4 gap-y-3">
       <div className="min-w-0 flex-1">
-        <Link href="/classes" className="text-ink-500 hover:text-ink-100 text-xs">
-          ← All classes
+        <Link href="/classes" className="text-ink-500 hover:text-ink-100 text-xs font-bold">
+          ← Classes
         </Link>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <h1 className="truncate text-xl font-semibold">{stream.title}</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <h1 className="page-title truncate">{stream.title}</h1>
           <StatusBadge status={stream.status} />
         </div>
       </div>
@@ -330,7 +329,7 @@ function StudioHeader({
 
 /**
  * The one decision on this page, given its own row so it is never hunted for.
- * "Stop broadcasting" pauses the feed but keeps the class open; "End class" in
+ * "Pause" pauses the feed but keeps the class open; "End class" in
  * the header is the irreversible one that publishes the recording.
  */
 function GoLiveBar({
@@ -347,24 +346,19 @@ function GoLiveBar({
   const onAir = phase !== "idle";
 
   return (
-    <div className="card flex flex-wrap items-center gap-4 px-4 py-3">
+    <div className="card flex flex-wrap items-center gap-4 px-5 py-4">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">
-          {phase === "idle" && (previewing ? "Ready when you are" : "Start a preview to go live")}
-          {phase === "connecting" && "Connecting to the server…"}
+        <p className="text-base font-black">
+          {phase === "idle" && (previewing ? "Ready" : "Start a preview to go live")}
+          {phase === "connecting" && "Connecting…"}
           {phase === "live" && "You are live"}
-          {phase === "reconnecting" && "Reconnecting — the class is still open"}
-        </p>
-        <p className="text-ink-500 text-xs">
-          {onAir
-            ? "The broadcast has no time limit and reconnects on its own if your network drops."
-            : "Students on the class page start playing automatically once you go live."}
+          {phase === "reconnecting" && "Reconnecting…"}
         </p>
       </div>
 
       {onAir ? (
         <Button variant="secondary" onClick={onStop}>
-          Stop broadcasting
+          Pause
         </Button>
       ) : (
         <Button

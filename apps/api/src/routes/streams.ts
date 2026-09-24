@@ -17,6 +17,7 @@ import { signEmbedToken, signPublishToken } from "../auth/tokens";
 import { env } from "../env";
 import { ApiError } from "../errors";
 import { canModerate } from "../services/access";
+import * as events from "../services/events";
 import * as mediamtx from "../services/mediamtx";
 import * as playback from "../services/playback";
 import * as presence from "../services/presence";
@@ -159,6 +160,13 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  /** Encoder connection, bitrate and audience; poll it every few seconds. */
+  app.get("/:id/health", async (request) => {
+    const { id } = validate.params(idParam, request);
+    const { stream } = await requireControl(request, id);
+    return streams.health(stream);
+  });
+
   app.post("/:id/key/rotate", async (request) => {
     const { id } = validate.params(idParam, request);
     const { stream } = await requireControl(request, id);
@@ -173,20 +181,23 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Ends a live class by disconnecting the publisher. The transcoder notices
-   * the media stop and drives the PROCESSING -> ENDED transition, so this
-   * endpoint deliberately does not set the status itself.
+   * Ends a live class by disconnecting the publisher. The transcoder still
+   * finalizes the recording (and emits `stream.ended`) once its grace window
+   * runs out, but an explicit end is not a dropped connection: viewers are
+   * told right away instead of watching a frozen frame for that window.
    */
   app.post("/:id/end", async (request) => {
     const { id } = validate.params(idParam, request);
     const { stream } = await requireControl(request, id);
 
-    const kicked = await mediamtx.kickPublisher(stream.id);
-    if (!kicked && stream.status === "LIVE") {
-      // Nothing was publishing but the row still says LIVE: the transcoder
-      // most likely died. Converge on the correct state rather than leaving a
-      // class that can never end.
+    await mediamtx.kickPublisher(stream.id);
+    if (stream.status === "LIVE") {
       await streams.beginProcessing(stream.id, stream.recordEnabled);
+      await events.publish(stream.id, {
+        t: "status",
+        status: stream.recordEnabled ? "PROCESSING" : "ENDED",
+        hlsUrl: null,
+      });
     }
 
     return { ended: true };

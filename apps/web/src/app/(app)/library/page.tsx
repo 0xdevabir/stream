@@ -29,11 +29,7 @@ export default function LibraryPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-xl font-semibold">Recordings</h1>
-        <p className="text-ink-500 mt-1 text-sm">
-          Every recorded class, ready to replay. Recordings are encrypted the
-          same way the live stream was.
-        </p>
+        <h1 className="page-title">Recordings</h1>
       </header>
 
       {error && <Alert>{error}</Alert>}
@@ -45,14 +41,14 @@ export default function LibraryPage() {
       ) : items.length === 0 ? (
         <EmptyState
           title="No recordings yet"
-          body="Classes with recording enabled appear here a minute or so after they end."
+          body="Recorded classes show up here after they end."
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((recording) => (
-            <article key={recording.id} className="card overflow-hidden">
+            <article key={recording.id} className="card group hover:border-ink-700 overflow-hidden transition-colors">
               <Link href={`/replay/${recording.id}`} className="block">
-                <div className="bg-ink-950 relative aspect-video">
+                <div className="bg-ink-950 relative aspect-video overflow-hidden">
                   {recording.posterUrl ? (
                     // Posters are served through the same authorized /vod path
                     // as the segments, so a plain <img> is enough.
@@ -60,7 +56,7 @@ export default function LibraryPage() {
                     <img
                       src={recording.posterUrl}
                       alt=""
-                      className="size-full object-cover"
+                      className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
                       loading="lazy"
                     />
                   ) : (
@@ -69,15 +65,15 @@ export default function LibraryPage() {
                     </div>
                   )}
                   {recording.durationSeconds !== null && (
-                    <span className="absolute right-2 bottom-2 rounded bg-black/80 px-1.5 py-0.5 text-[11px] tabular-nums">
+                    <span className="absolute right-2 bottom-2 rounded-full bg-black/80 px-2 py-0.5 text-[11px] font-bold tabular-nums">
                       {formatClock(recording.durationSeconds)}
                     </span>
                   )}
                 </div>
               </Link>
 
-              <div className="p-3">
-                <h3 className="truncate text-sm font-medium">
+              <div className="p-4">
+                <h3 className="truncate text-base font-black">
                   <Link href={`/replay/${recording.id}`} className="hover:underline">
                     {recording.title}
                   </Link>
@@ -85,9 +81,6 @@ export default function LibraryPage() {
                 <p className="text-ink-500 mt-1 text-xs">
                   {formatDateTime(recording.createdAt)} ·{" "}
                   {formatBytes(recording.sizeBytes)}
-                </p>
-                <p className="text-ink-500 mt-0.5 text-[11px]">
-                  {recording.renditions.join(" · ")}
                 </p>
               </div>
             </article>

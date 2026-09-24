@@ -362,3 +362,29 @@ export const embedTokenSchema = z.object({
   embedUrl: z.string(),
 });
 export type EmbedToken = z.infer<typeof embedTokenSchema>;
+
+// ── Stream health ──────────────────────────────────────────────────────────
+
+/**
+ * What an integrator polls to answer "is my encoder actually reaching you?".
+ * `encoder` reflects the ingest server directly, so it flips to connected the
+ * moment OBS starts sending, before the class itself is marked LIVE.
+ */
+export const streamHealthSchema = z.object({
+  streamId: z.string(),
+  status: z.enum(["SCHEDULED", "LIVE", "PROCESSING", "ENDED", "CANCELLED"]),
+  /** LIVE but the encoder dropped; viewers see "Stream paused". */
+  paused: z.boolean(),
+  viewers: z.number().int().nonnegative(),
+  encoder: z.object({
+    connected: z.boolean(),
+    protocol: z.enum(["rtmp", "srt", "webrtc", "rtsp"]).nullable(),
+    connectedAt: z.string().nullable(),
+    /** Codecs the encoder is sending, e.g. ["H264", "MPEG-4 Audio"]. */
+    tracks: z.array(z.string()),
+    /** Averaged between polls; null on the first sample. */
+    bitrateKbps: z.number().int().nonnegative().nullable(),
+    bytesReceived: z.number().nonnegative(),
+  }),
+});
+export type StreamHealth = z.infer<typeof streamHealthSchema>;

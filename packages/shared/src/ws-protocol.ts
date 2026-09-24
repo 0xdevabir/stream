@@ -54,6 +54,8 @@ export const serverMessageSchema = z.discriminatedUnion("t", [
     viewerCount: z.number().int().nonnegative(),
     canModerate: z.boolean(),
     slowModeSeconds: z.number().int().nonnegative(),
+    /** True while the class is open but its publisher has dropped (see `paused`). */
+    paused: z.boolean().default(false),
     /** Most recent messages so a late joiner sees context immediately. */
     backlog: z.array(chatMessageSchema),
   }),
@@ -78,6 +80,12 @@ export const serverMessageSchema = z.discriminatedUnion("t", [
   }),
 
   z.object({ t: z.literal("slowmode"), seconds: z.number().int().nonnegative() }),
+
+  /**
+   * The instructor stopped sending without ending the class. Viewers get a
+   * "paused" screen instead of a frozen frame; `false` means media is back.
+   */
+  z.object({ t: z.literal("paused"), paused: z.boolean() }),
 
   z.object({
     t: z.literal("error"),

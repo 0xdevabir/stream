@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { Logo } from "@/components/AppShell";
 import { Alert, Button, Field, Input } from "@/components/ui";
 import { errorMessage } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -85,14 +86,9 @@ function LoginForm() {
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="bg-brand-600 mx-auto mb-3 grid size-10 place-items-center rounded-xl">
-            ▶
-          </div>
-          <h1 className="text-xl font-semibold">Sign in</h1>
-          <p className="text-ink-500 mt-1 text-sm">
-            Live classes, recordings and Q&amp;A.
-          </p>
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <Logo className="size-11" />
+          <h1 className="text-3xl font-black">Sign in</h1>
         </div>
 
         <form onSubmit={submit} className="card space-y-4 p-6">
@@ -133,9 +129,9 @@ function LoginForm() {
         {showDemoLogins && (
           <div className="card mt-4 space-y-3 p-4">
             <div>
-              <p className="text-ink-100 text-sm font-medium">Quick demo login</p>
+              <p className="text-ink-100 text-sm font-bold">Demo accounts</p>
               <p className="text-ink-500 mt-0.5 text-xs">
-                Seeded accounts · password{" "}
+                Password{" "}
                 <span className="text-ink-300 font-mono">{DEMO_PASSWORD}</span>
               </p>
             </div>

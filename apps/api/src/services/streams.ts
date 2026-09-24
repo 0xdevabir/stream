@@ -1,5 +1,6 @@
 import {
   type CreateStreamInput,
+  type StreamHealth,
   type StreamSummary,
   type UpdateStreamInput,
   liveMasterUrl,
@@ -26,6 +27,8 @@ import {
 
 import { env } from "../env";
 import { ApiError } from "../errors";
+import { redis, streamStateKey } from "../redis";
+import * as mediamtx from "./mediamtx";
 import * as presence from "./presence";
 
 /**
@@ -274,6 +277,81 @@ export async function beginProcessing(
     },
   });
   await presence.clear(streamId);
+  await redis.del(streamStateKey(streamId));
+}
+
+/**
+ * The publisher dropped but the class is still open (the transcoder's grace
+ * window). Kept in Redis so a viewer who joins mid-pause sees it too; the TTL
+ * outlives any grace period, so a crashed transcoder cannot pin it forever.
+ */
+export async function setPaused(streamId: string, paused: boolean): Promise<void> {
+  if (paused) {
+    await redis.set(streamStateKey(streamId), "paused", "EX", 15 * 60);
+  } else {
+    await redis.del(streamStateKey(streamId));
+  }
+}
+
+export async function isPaused(streamId: string): Promise<boolean> {
+  return (await redis.get(streamStateKey(streamId))) === "paused";
+}
+
+const PROTOCOLS: Record<string, StreamHealth["encoder"]["protocol"]> = {
+  rtmpConn: "rtmp",
+  srtConn: "srt",
+  webRTCSession: "webrtc",
+  rtspSession: "rtsp",
+  rtspsSession: "rtsp",
+};
+
+const ingestSampleKey = (streamId: string) => `stream:${streamId}:ingest-sample`;
+
+/**
+ * Live encoder readout, straight from the ingest server. Bitrate is the byte
+ * delta since the previous sample, which is shared across callers so any two
+ * polls a few seconds apart produce a figure.
+ */
+export async function health(stream: Pick<Stream, "id" | "status">): Promise<StreamHealth> {
+  const [path, paused, viewers] = await Promise.all([
+    mediamtx.getPath(stream.id),
+    stream.status === "LIVE" ? isPaused(stream.id) : Promise.resolve(false),
+    presence.count(stream.id),
+  ]);
+
+  const connected = path?.ready === true && path.source !== null;
+  const bytes = connected ? path.bytesReceived : 0;
+  let bitrateKbps: number | null = null;
+
+  if (connected) {
+    const now = Date.now();
+    const previous = await redis.get(ingestSampleKey(stream.id));
+    const sample = previous ? (JSON.parse(previous) as { bytes: number; at: number }) : null;
+    const elapsed = sample ? now - sample.at : 0;
+
+    if (sample && elapsed >= 1_000 && elapsed <= 60_000 && bytes >= sample.bytes) {
+      bitrateKbps = Math.round(((bytes - sample.bytes) * 8) / elapsed);
+    }
+    // Keep the old sample while it is too fresh to measure against.
+    if (!sample || elapsed >= 2_000 || bytes < sample.bytes) {
+      await redis.set(ingestSampleKey(stream.id), JSON.stringify({ bytes, at: now }), "EX", 120);
+    }
+  }
+
+  return {
+    streamId: stream.id,
+    status: stream.status,
+    paused,
+    viewers,
+    encoder: {
+      connected,
+      protocol: connected ? (PROTOCOLS[path.source!.type] ?? null) : null,
+      connectedAt: connected ? path.readyTime : null,
+      tracks: connected ? path.tracks : [],
+      bitrateKbps,
+      bytesReceived: bytes,
+    },
+  };
 }
 
 export async function markEnded(streamId: string): Promise<void> {

@@ -49,7 +49,8 @@ All paths are under `/v1`. `:id` accepts a stream id or slug.
 | `DELETE` | `/streams/:id` | Cancel a class (`409` while live) |
 | `POST` | `/streams/:id/end` | End a live class |
 | `GET` | `/streams/:id/ingest` | RTMP/SRT credentials for OBS, and the WHIP URL and token for browser publishing |
-| `POST` | `/streams/:id/key/rotate` | Rotate the stream key |
+| `POST` | `/streams/:id/key/rotate` | Rotate the stream key (disconnects a connected encoder) |
+| `GET` | `/streams/:id/health` | Encoder connection, protocol, bitrate, tracks and viewer count |
 | `GET`/`POST`/`DELETE` | `/streams/:id/enrollments[/:userId]` | Manage enrollments (`ENROLLED` mode) |
 | `POST` | `/streams/:id/embed-tokens` | Mint an embed token (see below) |
 | `GET` | `/streams/:id/analytics` | Viewer analytics |
@@ -64,6 +65,49 @@ curl -X POST https://<host>/v1/streams \
   -H "Content-Type: application/json" \
   -d '{"title":"Algebra 101","scheduledAt":"2026-10-01T15:00:00Z"}'
 ```
+
+## Streaming from OBS
+
+`POST /streams` returns `ingest` with the credentials once; fetch them again
+any time with `GET /streams/:id/ingest`.
+
+| OBS field (Settings → Stream → Service: Custom) | Value |
+|---|---|
+| Server | `ingest.rtmp.url` |
+| Stream Key | `ingest.rtmp.streamKey` |
+
+Recommended output settings: H.264, AAC, keyframe interval 1 s (2 s at most),
+CBR, up to 6 Mbps for 1080p. For SRT encoders use `ingest.srt.url` as-is.
+
+Poll `GET /streams/:id/health` to confirm the encoder is reaching the server:
+
+```json
+{
+  "streamId": "…",
+  "status": "LIVE",
+  "paused": false,
+  "viewers": 42,
+  "encoder": {
+    "connected": true,
+    "protocol": "rtmp",
+    "connectedAt": "2026-10-01T15:00:02.000Z",
+    "tracks": ["H264", "MPEG-4 Audio"],
+    "bitrateKbps": 4480,
+    "bytesReceived": 183500000
+  }
+}
+```
+
+`encoder.connected` flips as soon as OBS connects; `status` becomes `LIVE`
+a few seconds later, once the first segments are ready. If the encoder drops
+while live, `paused` is `true` and viewers see "Stream paused" until it
+reconnects (within 45 s) or the class ends. `bitrateKbps` is averaged between
+polls and is `null` on the first one. Admins see the same readout for every
+stream at **/developers → Streams**.
+
+The ingest hostname comes from `INGEST_RTMP_URL` / `INGEST_SRT_HOST`, or the
+`PUBLIC_BASE_URL` hostname when those are unset. Port 1935/tcp (RTMP) and
+8890/udp (SRT) must be reachable from the encoder.
 
 ## Embedding the player
 
