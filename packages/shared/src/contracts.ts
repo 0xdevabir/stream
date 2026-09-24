@@ -144,6 +144,11 @@ export type StreamSummary = z.infer<typeof streamSummarySchema>;
 export const requestPlaybackSchema = z.object({
   password: z.string().max(200).optional(),
   shareToken: z.string().max(200).optional(),
+  /**
+   * Minted by the customer's backend (POST /v1/streams/:id/embed-tokens) and
+   * passed to an embedded player. Replaces every other access check.
+   */
+  embedToken: z.string().max(2000).optional(),
 });
 export type RequestPlaybackInput = z.infer<typeof requestPlaybackSchema>;
 
@@ -169,6 +174,13 @@ export const playbackGrantSchema = z.object({
   renditions: z.array(z.enum(RENDITION_NAMES)),
   chatEnabled: z.boolean(),
   questionsEnabled: z.boolean(),
+  /**
+   * The playback token itself, returned only to header-mode callers (embeds,
+   * which cannot rely on cookies in a third-party iframe). They send it back
+   * as X-Playback-Token on every media request. Omitted for cookie callers so
+   * it never becomes readable to page script.
+   */
+  playbackToken: z.string().optional(),
 });
 export type PlaybackGrant = z.infer<typeof playbackGrantSchema>;
 
@@ -252,3 +264,101 @@ export const apiErrorSchema = z.object({
   }),
 });
 export type ApiError = z.infer<typeof apiErrorSchema>;
+
+/** Cheap poll for an embedded player waiting on a class to start or finish. */
+export const playbackStatusSchema = z.object({
+  streamId: z.string(),
+  status: z.enum(["SCHEDULED", "LIVE", "PROCESSING", "ENDED", "CANCELLED"]),
+  hlsUrl: z.string().nullable(),
+  vodUrl: z.string().nullable(),
+});
+export type PlaybackStatus = z.infer<typeof playbackStatusSchema>;
+
+// ── Developer API ──────────────────────────────────────────────────────────
+
+export const createApiKeySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
+
+export const apiKeySummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prefix: z.string(),
+  createdBy: z.object({ id: z.string(), name: z.string() }),
+  lastUsedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type ApiKeySummary = z.infer<typeof apiKeySummarySchema>;
+
+/** The only response that ever contains the full key. */
+export const createdApiKeySchema = apiKeySummarySchema.extend({
+  key: z.string(),
+});
+export type CreatedApiKey = z.infer<typeof createdApiKeySchema>;
+
+export const WEBHOOK_EVENT_TYPES = [
+  "stream.live",
+  "stream.ended",
+  "recording.ready",
+  "recording.failed",
+] as const;
+export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+
+export const createWebhookSchema = z.object({
+  url: z.string().trim().url().max(2000),
+  description: z.string().trim().max(200).optional(),
+  /** Empty or omitted: every event type, including ones added later. */
+  events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).max(20).default([]),
+});
+export type CreateWebhookInput = z.input<typeof createWebhookSchema>;
+
+export const updateWebhookSchema = z.object({
+  enabled: z.boolean().optional(),
+  events: z.array(z.enum(WEBHOOK_EVENT_TYPES)).max(20).optional(),
+  description: z.string().trim().max(200).nullable().optional(),
+});
+export type UpdateWebhookInput = z.infer<typeof updateWebhookSchema>;
+
+export const webhookSummarySchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  description: z.string().nullable(),
+  events: z.array(z.string()),
+  enabled: z.boolean(),
+  createdAt: z.string(),
+});
+export type WebhookSummary = z.infer<typeof webhookSummarySchema>;
+
+/** The only response that ever contains the signing secret. */
+export const createdWebhookSchema = webhookSummarySchema.extend({
+  secret: z.string(),
+});
+export type CreatedWebhook = z.infer<typeof createdWebhookSchema>;
+
+export const webhookDeliverySchema = z.object({
+  id: z.string(),
+  eventId: z.string(),
+  eventType: z.string(),
+  status: z.enum(["PENDING", "SUCCEEDED", "FAILED"]),
+  attempts: z.number(),
+  responseStatus: z.number().nullable(),
+  lastError: z.string().nullable(),
+  createdAt: z.string(),
+  deliveredAt: z.string().nullable(),
+});
+export type WebhookDeliverySummary = z.infer<typeof webhookDeliverySchema>;
+
+export const createEmbedTokenSchema = z.object({
+  /** Seconds; 60 to 86400. Keep it close to the length of the class. */
+  ttlSeconds: z.number().int().min(60).max(86_400).default(3_600),
+});
+export type CreateEmbedTokenInput = z.input<typeof createEmbedTokenSchema>;
+
+export const embedTokenSchema = z.object({
+  token: z.string(),
+  expiresAt: z.string(),
+  /** Ready-to-use iframe src. */
+  embedUrl: z.string(),
+});
+export type EmbedToken = z.infer<typeof embedTokenSchema>;

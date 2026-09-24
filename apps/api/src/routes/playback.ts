@@ -1,9 +1,18 @@
-import { type PlaybackGrant, requestPlaybackSchema } from "@stream/shared";
+import {
+  type PlaybackGrant,
+  type PlaybackStatus,
+  requestPlaybackSchema,
+} from "@stream/shared";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
-import { COOKIE, clearPlaybackCookie, setPlaybackCookie } from "../auth/cookies";
-import { verifyPlaybackToken } from "../auth/tokens";
+import {
+  PLAYBACK_TOKEN_HEADER,
+  clearPlaybackCookie,
+  playbackTokenFrom,
+  setPlaybackCookie,
+} from "../auth/cookies";
+import { type PlaybackClaims, verifyEmbedToken, verifyPlaybackToken } from "../auth/tokens";
 import { ApiError } from "../errors";
 import { denialStatus, resolveStreamAccess } from "../services/access";
 import * as playbackService from "../services/playback";
@@ -26,8 +35,20 @@ export async function playbackRoutes(app: FastifyInstance): Promise<void> {
     {
       config: {
         // Brute-forcing a class password or share token has to go through
-        // here, so it is the right place for a strict limit.
-        rateLimit: { max: 30, timeWindow: "5 minutes" },
+        // here, so it is the right place for a strict limit. Embeds and
+        // renewals are exempt: they present a signed token rather than a
+        // guessable secret, and a whole classroom embedding one class often
+        // shares a single school NAT address. Neither path falls back to the
+        // password check, so the exemption cannot be used to brute-force one.
+        rateLimit: {
+          max: 30,
+          timeWindow: "5 minutes",
+          hook: "preHandler",
+          allowList: (request) =>
+            typeof request.headers[PLAYBACK_TOKEN_HEADER] === "string" ||
+            typeof (request.body as { embedToken?: unknown } | undefined)
+              ?.embedToken === "string",
+        },
       },
     },
     async (request, reply) => {
@@ -35,21 +56,55 @@ export async function playbackRoutes(app: FastifyInstance): Promise<void> {
       const input = validate.body(requestPlaybackSchema, request);
       const stream = await streams.requireStream(id);
 
-      const decision = await resolveStreamAccess(stream, {
-        userId: request.auth?.userId ?? null,
-        organizationId: request.auth?.organizationId ?? null,
-        role: request.auth?.role ?? null,
-        password: input.password,
-        shareToken: input.shareToken,
-      });
+      // Header mode: the caller is an embedded player that cannot rely on
+      // cookies, so the token travels in the response body and comes back as
+      // X-Playback-Token.
+      let headerMode = false;
+      let userId = request.auth?.userId ?? null;
+      let renewing: PlaybackClaims | null = null;
 
-      if (!decision.allowed) {
-        return reply.code(denialStatus(decision.reason)).send({
-          error: {
-            code: decision.reason,
-            message: describeDenial(decision.reason),
-          },
+      const presented = request.headers[PLAYBACK_TOKEN_HEADER];
+      if (input.embedToken) {
+        const embed = await verifyEmbedToken(input.embedToken);
+        if (
+          !embed ||
+          embed.streamId !== stream.id ||
+          embed.organizationId !== stream.organizationId
+        ) {
+          throw new ApiError(401, "invalid_embed_token", "This embed link is invalid or has expired");
+        }
+        headerMode = true;
+        userId = null;
+      } else if (typeof presented === "string") {
+        // Renewal: a still-valid session for this class is swapped for a
+        // fresh one, without repeating the original access check.
+        renewing = await verifyPlaybackToken(presented);
+        if (
+          !renewing ||
+          renewing.streamId !== stream.id ||
+          !(await playbackService.isPlaybackSessionActive(renewing.jti))
+        ) {
+          throw new ApiError(401, "invalid_playback_token", "Playback session expired; reload the player");
+        }
+        headerMode = true;
+        userId = renewing.userId;
+      } else {
+        const decision = await resolveStreamAccess(stream, {
+          userId: request.auth?.userId ?? null,
+          organizationId: request.auth?.organizationId ?? null,
+          role: request.auth?.role ?? null,
+          password: input.password,
+          shareToken: input.shareToken,
         });
+
+        if (!decision.allowed) {
+          return reply.code(denialStatus(decision.reason)).send({
+            error: {
+              code: decision.reason,
+              message: describeDenial(decision.reason),
+            },
+          });
+        }
       }
 
       if (stream.status === "CANCELLED") {
@@ -64,14 +119,15 @@ export async function playbackRoutes(app: FastifyInstance): Promise<void> {
 
       const session = await playbackService.issuePlaybackSession({
         streamId: stream.id,
-        userId: request.auth?.userId ?? null,
+        userId,
         scope,
         recordingId: recordingId ?? undefined,
         ip: request.ip,
         userAgent: request.headers["user-agent"],
       });
 
-      setPlaybackCookie(reply, session.token);
+      if (renewing) await playbackService.revokePlaybackSession(renewing.jti);
+      if (!headerMode) setPlaybackCookie(reply, session.token);
 
       const urls = streams.playbackUrls(stream);
 
@@ -86,6 +142,7 @@ export async function playbackRoutes(app: FastifyInstance): Promise<void> {
         renditions: streams.ladder.map((rendition) => rendition.name),
         chatEnabled: stream.chatEnabled,
         questionsEnabled: stream.questionsEnabled,
+        ...(headerMode ? { playbackToken: session.token } : {}),
       };
 
       return grant;
@@ -97,7 +154,7 @@ export async function playbackRoutes(app: FastifyInstance): Promise<void> {
    * lid never reaches this, which is why sessions also expire on their own.
    */
   app.post("/:id/playback/end", async (request, reply) => {
-    const token = request.cookies[COOKIE.playback];
+    const token = playbackTokenFrom(request);
     if (token) {
       const claims = await verifyPlaybackToken(token);
       if (claims) await playbackService.revokePlaybackSession(claims.jti);
@@ -105,6 +162,34 @@ export async function playbackRoutes(app: FastifyInstance): Promise<void> {
 
     clearPlaybackCookie(reply);
     return reply.code(204).send();
+  });
+
+
+  /**
+   * What an embedded player polls while it waits for a class to start or its
+   * replay to be ready. Authorized by the playback session, not a user login,
+   * because an embed has none.
+   */
+  app.get("/:id/playback/status", async (request) => {
+    const { id } = validate.params(idParam, request);
+    const token = playbackTokenFrom(request);
+    const claims = token ? await verifyPlaybackToken(token) : null;
+    if (!claims || !(await playbackService.isPlaybackSessionActive(claims.jti))) {
+      throw ApiError.unauthorized("No playback session");
+    }
+
+    const stream = await streams.requireStream(id);
+    if (stream.id !== claims.streamId) {
+      throw ApiError.forbidden("This session is for a different class");
+    }
+
+    const status: PlaybackStatus = {
+      streamId: stream.id,
+      status: stream.status,
+      hlsUrl: streams.playbackUrls(stream).hlsUrl,
+      vodUrl: streams.recordingUrl(stream.recordings[0]?.id ?? null),
+    };
+    return status;
   });
 }
 

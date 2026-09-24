@@ -37,6 +37,12 @@ export type PlayerProps = {
   whepUrl?: string | null;
   whepToken?: string | null;
   autoPlay?: boolean;
+  /**
+   * Header-mode credential for embeds, sent as X-Playback-Token on every
+   * playlist, segment and key request because a third-party iframe cannot
+   * rely on our cookie. Omit on first-party pages, which use the cookie.
+   */
+  playbackToken?: string | null;
   /** Rendered over the video surface when `src` is null. */
   placeholder?: ReactNode;
   /** Fired on every ABR switch; the watch page forwards it as telemetry. */
@@ -86,6 +92,7 @@ export function Player({
   whepUrl,
   whepToken,
   autoPlay = true,
+  playbackToken,
   placeholder,
   onQualityChange,
   onFatalError,
@@ -113,6 +120,11 @@ export function Player({
   qualityCallback.current = onQualityChange;
   const fatalCallback = useRef(onFatalError);
   fatalCallback.current = onFatalError;
+  // Read at request time, so a renewed token takes effect without rebuilding
+  // the hls.js instance (which would interrupt playback).
+  const playbackTokenRef = useRef(playbackToken);
+  playbackTokenRef.current = playbackToken;
+  const headerMode = Boolean(playbackToken);
 
   const canUseWhep = Boolean(whepUrl) && live;
 
@@ -132,6 +144,13 @@ export function Player({
       if (disposed) return;
 
       if (!HlsCtor.isSupported()) {
+        // The native pipeline gives us no way to add a header, and an embed
+        // has no cookie to fall back on. hls.js covers iOS 17.1+ through
+        // ManagedMediaSource, so this is only older iPhones.
+        if (headerMode) {
+          setError("Update iOS to watch this class here, or open it in a new tab");
+          return;
+        }
         // Safari on iPhone: no MSE, but a native HLS pipeline that already
         // understands AES-128 and sends our same-origin cookie by itself.
         if (video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -143,7 +162,17 @@ export function Player({
         return;
       }
 
-      const hls = new HlsCtor(HLS_CONFIG);
+      const hls = new HlsCtor({
+        ...HLS_CONFIG,
+        ...(headerMode
+          ? {
+              xhrSetup: (xhr: XMLHttpRequest) => {
+                const token = playbackTokenRef.current;
+                if (token) xhr.setRequestHeader("X-Playback-Token", token);
+              },
+            }
+          : {}),
+      });
       hlsRef.current = hls;
 
       hls.on(HlsCtor.Events.MANIFEST_PARSED, (_event, data: ManifestParsedData) => {
@@ -202,7 +231,7 @@ export function Player({
       setLevels([]);
       setCurrentLevel(-1);
     };
-  }, [mode, src, autoPlay]);
+  }, [mode, src, autoPlay, headerMode]);
 
   // ── WHEP ─────────────────────────────────────────────────────────────────
 

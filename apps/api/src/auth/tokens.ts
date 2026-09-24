@@ -185,3 +185,55 @@ export async function verifyPublishToken(
     return null;
   }
 }
+
+// ── Embed tokens ───────────────────────────────────────────────────────────
+
+export const EMBED_TOKEN_TTL = { min: 60, max: 86_400, default: 3_600 } as const;
+
+export interface EmbedClaims {
+  streamId: string;
+  /** The organization that minted it; a moved stream invalidates the token. */
+  organizationId: string;
+}
+
+/**
+ * Minted by a customer's backend (with an API key) for one of *their* signed-in
+ * users, then placed in an iframe URL. It stands in for the whole access check
+ * -- whoever holds it may watch that one class until it expires -- so it is
+ * scoped to a single stream and short-lived. Signed with PLAYBACK_SECRET under
+ * its own audience so it can never be confused with a playback token.
+ */
+export async function signEmbedToken(
+  claims: EmbedClaims,
+  ttlSeconds: number,
+): Promise<{ token: string; expiresAt: Date }> {
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  const token = await new SignJWT({
+    sid: claims.streamId,
+    org: claims.organizationId,
+  })
+    .setProtectedHeader({ alg: ALG })
+    .setIssuer(ISSUER)
+    .setAudience("embed")
+    .setIssuedAt()
+    .setExpirationTime(`${ttlSeconds}s`)
+    .sign(playbackKey);
+  return { token, expiresAt };
+}
+
+export async function verifyEmbedToken(
+  token: string,
+): Promise<EmbedClaims | null> {
+  try {
+    const { payload } = await jwtVerify(token, playbackKey, {
+      issuer: ISSUER,
+      audience: "embed",
+    });
+    if (typeof payload.sid !== "string" || typeof payload.org !== "string") {
+      return null;
+    }
+    return { streamId: payload.sid, organizationId: payload.org };
+  } catch {
+    return null;
+  }
+}

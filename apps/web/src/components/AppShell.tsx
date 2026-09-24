@@ -6,7 +6,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { Button, Spinner } from "@/components/ui";
 import { classNames } from "@/lib/format";
-import { canTeach, useSession } from "@/lib/session";
+import { canTeach, isOrgAdmin, useSession } from "@/lib/session";
 
 /**
  * The signed-in chrome.
@@ -45,8 +45,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 // Enrolment is per-class rather than org-wide, so it lives on a class's
 // manage screen instead of a top-level nav entry.
 const LINKS = [
-  { href: "/classes", label: "Classes", teachOnly: false },
-  { href: "/library", label: "Recordings", teachOnly: false },
+  { href: "/classes", label: "Classes", teachOnly: false, adminOnly: false },
+  { href: "/library", label: "Recordings", teachOnly: false, adminOnly: false },
+  { href: "/developers", label: "Developers", teachOnly: true, adminOnly: true },
 ];
 
 export function TopNav() {
@@ -64,7 +65,10 @@ export function TopNav() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {LINKS.filter((link) => !link.teachOnly || canTeach(user)).map((link) => (
+          {LINKS.filter(
+            (link) =>
+              (!link.teachOnly || canTeach(user)) && (!link.adminOnly || isOrgAdmin(user)),
+          ).map((link) => (
             <Link
               key={link.href}
               href={link.href}

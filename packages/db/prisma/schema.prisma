@@ -5,7 +5,7 @@
 // fails if the two drift.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" covers local development on macOS; the Debian targets cover the
   // node:24-bookworm-slim containers on both amd64 and arm64 hosts.
   binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
@@ -67,11 +67,13 @@ model Organization {
   // Ceiling on concurrent live streams; the transcoder is the scarce resource.
   maxConcurrentStreams Int @default(3)
 
-  memberships Membership[]
-  courses     Course[]
-  streams     Stream[]
-  invitations Invitation[]
-  auditLogs   AuditLog[]
+  memberships      Membership[]
+  courses          Course[]
+  streams          Stream[]
+  invitations      Invitation[]
+  auditLogs        AuditLog[]
+  apiKeys          ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
 }
 
 model User {
@@ -93,6 +95,7 @@ model User {
   viewerSessions    ViewerSession[]
   refreshTokens     RefreshToken[]
   auditLogs         AuditLog[]
+  apiKeys           ApiKey[]
 }
 
 model Membership {
@@ -353,4 +356,75 @@ model AuditLog {
 
   @@index([organizationId, createdAt])
   @@index([action, createdAt])
+}
+
+// ─── Developer API ──────────────────────────────────────────────
+
+// Server-to-server credential for an organization. Only the sha256 of the
+// secret is stored; `prefix` is the non-secret head shown in the dashboard.
+// A key acts with its creator's identity, capped at ADMIN, and stops working
+// the moment the creator loses ADMIN in the organization.
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  createdById    String
+  name           String
+  prefix         String
+  keyHash        String    @unique
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model WebhookEndpoint {
+  id             String   @id @default(cuid())
+  organizationId String
+  url            String
+  description    String?
+  // Event types to deliver; empty means all.
+  events         String[]
+  // Signing secret, AES-GCM wrapped under CONTENT_KEY_SECRET: it has to be
+  // recoverable to sign, so it cannot be hashed like an API key.
+  secretWrapped  Bytes
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+// Outbox row per (event, endpoint). The dispatcher claims due rows with
+// FOR UPDATE SKIP LOCKED, so several API replicas can share the queue.
+model WebhookDelivery {
+  id             String                @id @default(cuid())
+  endpointId     String
+  eventId        String
+  eventType      String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attempts       Int                   @default(0)
+  nextAttemptAt  DateTime              @default(now())
+  responseStatus Int?
+  lastError      String?
+  createdAt      DateTime              @default(now())
+  deliveredAt    DateTime?
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
 }

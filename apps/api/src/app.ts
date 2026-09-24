@@ -4,12 +4,13 @@ import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { loadSession, verifyCsrf } from "./auth/session";
+import { loadSession, rejectApiKey, verifyCsrf } from "./auth/session";
 import { env } from "./env";
 import { registerErrorHandler } from "./errors";
 import { redis } from "./redis";
 import { authRoutes } from "./routes/auth";
 import { chatRoutes } from "./routes/chat";
+import { developerRoutes } from "./routes/developer";
 import { healthRoutes } from "./routes/health";
 import { internalRoutes } from "./routes/internal";
 import { keyRoutes } from "./routes/keys";
@@ -73,12 +74,21 @@ export async function buildApp(): Promise<FastifyInstance> {
       scope.addHook("onRequest", loadSession);
       scope.addHook("preHandler", verifyCsrf);
 
-      await scope.register(authRoutes, { prefix: "/auth" });
+      // Sessions are for people; an API key has no business refreshing or
+      // ending one.
+      await scope.register(
+        async (auth) => {
+          auth.addHook("onRequest", rejectApiKey);
+          await auth.register(authRoutes);
+        },
+        { prefix: "/auth" },
+      );
       await scope.register(streamRoutes, { prefix: "/streams" });
       await scope.register(playbackRoutes, { prefix: "/streams" });
       await scope.register(chatRoutes, { prefix: "/streams" });
       await scope.register(recordingRoutes, { prefix: "/recordings" });
       await scope.register(keyRoutes, { prefix: "/keys" });
+      await scope.register(developerRoutes, { prefix: "/developer" });
     },
     { prefix: "/v1" },
   );

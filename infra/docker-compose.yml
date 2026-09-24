@@ -25,6 +25,12 @@ x-app-env: &app-env
   MEDIA_ROOT: ${MEDIA_ROOT}
   LADDER: ${LADDER}
   VIDEO_ENCODER: ${VIDEO_ENCODER}
+  # Defaulted here too: an older .env without them would otherwise pass empty
+  # strings, which the transcoder rejects.
+  HW_DEVICE: ${HW_DEVICE:-/dev/dri/renderD128}
+  RATE_CONTROL: ${RATE_CONTROL:-capped-crf}
+  VIDEO_QUALITY: ${VIDEO_QUALITY:-23}
+  MAX_FPS: ${MAX_FPS:-30}
   X264_PRESET: ${X264_PRESET}
   HLS_SEGMENT_SECONDS: ${HLS_SEGMENT_SECONDS}
   HLS_LIST_SIZE: ${HLS_LIST_SIZE}

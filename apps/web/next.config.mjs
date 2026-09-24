@@ -15,7 +15,8 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // Everything except the embeddable player may only be framed by us.
+        source: "/((?!embed/).*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
@@ -26,6 +27,19 @@ const nextConfig = {
             // so they are allowed for same-origin only rather than denied.
             value: "camera=(self), microphone=(self), display-capture=(self)",
           },
+        ],
+      },
+      {
+        // The player customers put in an iframe on their own sites. Access is
+        // carried by the short-lived embed token in the URL, not by who frames
+        // it, so any ancestor is allowed; no-referrer keeps that token out of
+        // Referer headers.
+        source: "/embed/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Content-Security-Policy", value: "frame-ancestors *" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), display-capture=()" },
         ],
       },
     ];

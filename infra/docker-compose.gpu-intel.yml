@@ -1,0 +1,18 @@
+# Intel iGPU encoding (QuickSync). Layer it over the base file on a Linux host
+# with /dev/dri present:
+#
+#   docker compose --env-file .env -f infra/docker-compose.yml \
+#     -f infra/docker-compose.gpu-intel.yml up -d --build
+#
+# and set VIDEO_ENCODER=h264_qsv in .env. Check the GPU is usable with
+#   docker compose ... exec transcoder vainfo
+# A whole 1080p ladder then costs a few percent of one CPU core instead of
+# most of an 8-core box.
+
+services:
+  transcoder:
+    build:
+      args:
+        GPU: intel
+    devices:
+      - /dev/dri:/dev/dri

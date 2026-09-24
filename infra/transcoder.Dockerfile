@@ -4,12 +4,25 @@
 # has everything the ladder needs: the hls muxer with var_stream_map (one
 # process, many renditions, one master playlist) and hls_key_info_file for
 # AES-128 segment encryption.
+#
+# GPU=intel adds the Intel media driver and QSV runtimes, for h264_qsv /
+# h264_vaapi on an Intel iGPU (see docker-compose.gpu-intel.yml). The
+# non-free driver is the one with full H.264 encode support.
 
 FROM node:24-bookworm-slim AS base
+ARG GPU=none
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable \
+ && if [ "$GPU" = "intel" ]; then \
+      sed -i 's/^Components: main$/Components: main non-free non-free-firmware/' \
+        /etc/apt/sources.list.d/debian.sources; \
+    fi \
  && apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+ && if [ "$GPU" = "intel" ]; then \
+      apt-get install -y --no-install-recommends \
+        intel-media-va-driver-non-free libmfx1 libmfx-gen1.2 vainfo; \
+    fi \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 

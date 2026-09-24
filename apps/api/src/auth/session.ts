@@ -4,6 +4,7 @@ import { type OrgRole, hasRole } from "@stream/shared";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { ApiError } from "../errors";
+import { authenticateApiKey, consumeApiKeyQuota } from "../services/api-keys";
 import { COOKIE } from "./cookies";
 import { type AccessClaims, verifyAccessToken } from "./tokens";
 
@@ -11,11 +12,14 @@ declare module "fastify" {
   interface FastifyRequest {
     /** Populated by `loadSession` on every request; undefined when signed out. */
     auth?: AccessClaims;
+    /** Set when the caller authenticated with an organization API key. */
+    apiKey?: { id: string };
   }
 }
 
 /**
- * Resolves the session from the access cookie on every request.
+ * Resolves the session on every request: an organization API key in
+ * `Authorization: Bearer`, or else the access cookie.
  *
  * Role and organization are read from the token rather than the database, so
  * an ordinary API call costs zero queries to authenticate. The trade-off is
@@ -23,12 +27,42 @@ declare module "fastify" {
  * take effect; anything that must be immediate -- revoking access to a live
  * class -- is enforced against Redis in the playback path instead.
  */
-export async function loadSession(request: FastifyRequest): Promise<void> {
+export async function loadSession(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  // A server-to-server caller. An Authorization header that is present but
+  // wrong is an error rather than a silent fall-through to cookies, so a
+  // misconfigured integration fails loudly instead of acting anonymously.
+  const authorization = request.headers.authorization;
+  if (authorization) {
+    const match = /^Bearer\s+(\S+)$/i.exec(authorization);
+    const result = match ? await authenticateApiKey(match[1]!) : null;
+    if (!result) throw ApiError.unauthorized("Invalid API key");
+
+    const remaining = await consumeApiKeyQuota(result.keyId);
+    reply.header("X-RateLimit-Remaining", String(remaining));
+    request.auth = result.claims;
+    request.apiKey = { id: result.keyId };
+    return;
+  }
+
   const token = request.cookies[COOKIE.access];
   if (!token) return;
 
   const claims = await verifyAccessToken(token);
   if (claims) request.auth = claims;
+}
+
+/**
+ * For routes that manage credentials (sign-in, API keys, webhooks): an API
+ * key must not be able to mint more API keys or read webhook secrets, or a
+ * single leak would become permanent.
+ */
+export async function rejectApiKey(request: FastifyRequest): Promise<void> {
+  if (request.apiKey) {
+    throw ApiError.forbidden("This endpoint is not available to API keys");
+  }
 }
 
 export function requireAuth(request: FastifyRequest): AccessClaims {

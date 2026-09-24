@@ -1,4 +1,6 @@
 import {
+  type EmbedToken,
+  createEmbedTokenSchema,
   createStreamSchema,
   enrollUsersSchema,
   idSchema,
@@ -11,7 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { requireAuth, requireRole } from "../auth/session";
-import { signPublishToken } from "../auth/tokens";
+import { signEmbedToken, signPublishToken } from "../auth/tokens";
 import { env } from "../env";
 import { ApiError } from "../errors";
 import { canModerate } from "../services/access";
@@ -267,6 +269,33 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
     await playback.revokeUserSessions(userId, stream.id);
 
     return reply.code(204).send();
+  });
+
+  // ── Embedding ────────────────────────────────────────────────────────────
+
+  /**
+   * Called by a customer's backend (API key) once it has decided one of its
+   * own users may watch. The token replaces our access check entirely, so
+   * this sits behind the same control check as editing the class.
+   */
+  app.post("/:id/embed-tokens", async (request) => {
+    const { id } = validate.params(idParam, request);
+    const input = validate.body(createEmbedTokenSchema, request);
+    const { stream } = await requireControl(request, id);
+
+    const { token, expiresAt } = await signEmbedToken(
+      { streamId: stream.id, organizationId: stream.organizationId },
+      input.ttlSeconds,
+    );
+    const embedUrl = new URL(`/embed/${encodeURIComponent(stream.slug)}`, env.PUBLIC_BASE_URL);
+    embedUrl.searchParams.set("token", token);
+
+    const result: EmbedToken = {
+      token,
+      expiresAt: expiresAt.toISOString(),
+      embedUrl: embedUrl.toString(),
+    };
+    return result;
   });
 
   // ── Analytics ────────────────────────────────────────────────────────────

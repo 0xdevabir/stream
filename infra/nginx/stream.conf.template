@@ -66,6 +66,9 @@ server {
     # ── Authorization subrequest ───────────────────────────────────────────
     # 204 allows, 401/403 denies. The API resolves the playback cookie against
     # the stream's access mode; see apps/api/src/routes/internal.ts.
+    # Embedded players send the same token as an X-Playback-Token header
+    # instead (third-party iframes lose our cookies); the subrequest inherits
+    # the client's headers, so it reaches the API unchanged.
     location = /_authz {
         internal;
 
@@ -79,7 +82,9 @@ server {
         proxy_set_header  X-Internal-Token "${INTERNAL_TOKEN}";
 
         proxy_cache       authz;
-        proxy_cache_key   "$cookie_pt|$media_scope";
+        # Both credentials are in the key: the API prefers the header, and two
+        # viewers must never share a cached answer.
+        proxy_cache_key   "$http_x_playback_token|$cookie_pt|$media_scope";
         proxy_cache_valid 204 200 15s;
         proxy_cache_valid 401 403 404 5s;
         # One request fills the cache; the rest wait rather than stampeding.
@@ -125,6 +130,7 @@ server {
         proxy_pass       http://$s3_host/${S3_BUCKET}/vod/$rid/$rest;
         proxy_set_header Host $s3_host;
         proxy_set_header Authorization "";
+        proxy_set_header X-Playback-Token "";
         proxy_hide_header x-amz-id-2;
         proxy_hide_header x-amz-request-id;
         proxy_hide_header Set-Cookie;

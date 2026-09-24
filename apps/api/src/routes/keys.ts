@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
-import { COOKIE } from "../auth/cookies";
+import { playbackTokenFrom } from "../auth/cookies";
 import { verifyPlaybackToken } from "../auth/tokens";
 import { ApiError } from "../errors";
 import { findContentKeyById } from "../services/content-keys";
@@ -34,7 +34,7 @@ export async function keyRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { keyId } = validate.params(keyParam, request);
 
-      const token = request.cookies[COOKIE.playback];
+      const token = playbackTokenFrom(request);
       if (!token) throw ApiError.unauthorized("No playback session");
 
       const claims = await verifyPlaybackToken(token);

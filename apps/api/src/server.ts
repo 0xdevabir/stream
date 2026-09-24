@@ -3,6 +3,7 @@ import { disconnect } from "@stream/db";
 import { buildApp } from "./app";
 import { env } from "./env";
 import { closeRedis } from "./redis";
+import { startDispatcher, stopDispatcher } from "./services/webhooks";
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -16,6 +17,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
 
     app.log.info({ signal }, "shutting down");
+    stopDispatcher();
     try {
       await app.close();
       await Promise.allSettled([disconnect(), closeRedis()]);
@@ -30,6 +32,7 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => void shutdown("SIGINT"));
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
+  startDispatcher(app.log);
 }
 
 main().catch((error) => {

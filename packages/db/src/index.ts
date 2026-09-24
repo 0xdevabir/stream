@@ -1,6 +1,7 @@
 export { Prisma, PrismaClient } from "@prisma/client";
 export type {
   AccessMode,
+  ApiKey,
   ChatMessage,
   Course,
   CourseEnrollment,
@@ -19,6 +20,9 @@ export type {
   StreamStatus,
   User,
   ViewerSession,
+  WebhookDelivery,
+  WebhookDeliveryStatus,
+  WebhookEndpoint,
 } from "@prisma/client";
 
 export * from "./client";

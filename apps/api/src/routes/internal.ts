@@ -5,7 +5,7 @@ import { hashStreamKey, prisma } from "@stream/db";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import { COOKIE } from "../auth/cookies";
+import { playbackTokenFrom } from "../auth/cookies";
 import { verifyPlaybackToken, verifyPublishToken } from "../auth/tokens";
 import { env } from "../env";
 import { ApiError } from "../errors";
@@ -14,6 +14,7 @@ import * as events from "../services/events";
 import { isPlaybackSessionActive } from "../services/playback";
 import * as presence from "../services/presence";
 import * as streams from "../services/streams";
+import * as webhooks from "../services/webhooks";
 import * as validate from "../validate";
 
 /**
@@ -182,7 +183,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const [kind, resourceId] = scope.split(":", 2);
     if (!kind || !resourceId) return reply.code(403).send();
 
-    const token = request.cookies[COOKIE.playback];
+    const token = playbackTokenFrom(request);
     if (!token) return reply.code(401).send();
 
     const claims = await verifyPlaybackToken(token);
@@ -264,16 +265,28 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     requireInternalToken(request);
     const { id } = validate.params(streamIdParam, request);
 
-    await streams.beginLive(id);
+    const wentLive = await streams.beginLive(id);
     const stream = await streams.findStreamBySlugOrId(id);
     if (stream) {
-      const urls = streams.playbackUrls(stream);
+      // Only on a real transition: the transcoder re-reports after an encoder
+      // reconnect, and customers should see one stream.live per session.
+      if (wentLive) {
+        await webhooks.emit(
+          stream.organizationId,
+          "stream.live",
+          {
+            stream: webhookStream(stream),
+            hlsUrl: absoluteUrl(urls(stream).hlsUrl),
+          },
+          request.log,
+        );
+      }
       // Viewers already sitting on the pre-live page start playing without a
       // refresh.
       await events.publish(id, {
         t: "status",
         status: "LIVE",
-        hlsUrl: urls.hlsUrl,
+        hlsUrl: urls(stream).hlsUrl,
       });
     }
 
@@ -287,11 +300,23 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
 
     const stream = await prisma.stream.findUnique({
       where: { id },
-      select: { recordEnabled: true },
+      select: WEBHOOK_STREAM_SELECT,
     });
     if (!stream) throw ApiError.notFound("Unknown stream");
 
     await streams.beginProcessing(id, stream.recordEnabled);
+    await webhooks.emit(
+      stream.organizationId,
+      "stream.ended",
+      {
+        stream: webhookStream({
+          ...stream,
+          status: stream.recordEnabled ? "PROCESSING" : "ENDED",
+        }),
+        recordingExpected: stream.recordEnabled,
+      },
+      request.log,
+    );
     await events.publish(id, {
       t: "status",
       status: stream.recordEnabled ? "PROCESSING" : "ENDED",
@@ -359,11 +384,32 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         error: input.error ?? null,
         readyAt: input.status === "READY" ? new Date() : null,
       },
-      select: { id: true, streamId: true },
+      select: {
+        id: true,
+        streamId: true,
+        durationSeconds: true,
+        stream: { select: WEBHOOK_STREAM_SELECT },
+      },
     });
 
     // The class is only truly over once its replay exists (or has failed).
     await streams.markEnded(recording.streamId);
+    await webhooks.emit(
+      recording.stream.organizationId,
+      input.status === "READY" ? "recording.ready" : "recording.failed",
+      {
+        stream: webhookStream({ ...recording.stream, status: "ENDED" }),
+        recording: {
+          id: recording.id,
+          status: input.status,
+          durationSeconds: recording.durationSeconds,
+          ...(input.status === "READY"
+            ? { vodUrl: absoluteUrl(streams.recordingUrl(recording.id)) }
+            : { error: input.error ?? null }),
+        },
+      },
+      request.log,
+    );
     await events.publish(recording.streamId, {
       t: "status",
       status: "ENDED",
@@ -372,4 +418,35 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.code(204).send();
   });
+}
+
+// ── Webhook payloads ─────────────────────────────────────────────────────────
+
+const WEBHOOK_STREAM_SELECT = {
+  id: true,
+  slug: true,
+  title: true,
+  status: true,
+  organizationId: true,
+  recordEnabled: true,
+  latencyMode: true,
+} as const;
+
+/** The stable, documented shape of `data.stream` in every webhook event. */
+function webhookStream(stream: {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+}) {
+  return { id: stream.id, slug: stream.slug, title: stream.title, status: stream.status };
+}
+
+function urls(stream: { id: string; status: string; latencyMode: string }) {
+  return streams.playbackUrls({ ...stream, status: "LIVE" });
+}
+
+/** Webhook receivers are off-site, so relative edge paths are made absolute. */
+function absoluteUrl(path: string | null): string | null {
+  return path ? new URL(path, env.PUBLIC_BASE_URL).toString() : null;
 }

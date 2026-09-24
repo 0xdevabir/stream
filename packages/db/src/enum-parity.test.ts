@@ -10,6 +10,7 @@ import {
   ORG_ROLES,
   RECORDING_STATUSES,
   STREAM_STATUSES,
+  WEBHOOK_DELIVERY_STATUSES,
 } from "@stream/shared";
 
 /**
@@ -42,6 +43,7 @@ const CASES: Array<[string, readonly string[]]> = [
   ["RecordingStatus", RECORDING_STATUSES],
   ["MessageKind", MESSAGE_KINDS],
   ["LatencyMode", LATENCY_MODES],
+  ["WebhookDeliveryStatus", WEBHOOK_DELIVERY_STATUSES],
 ];
 
 for (const [prismaName, sharedValues] of CASES) {

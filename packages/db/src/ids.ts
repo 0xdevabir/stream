@@ -58,3 +58,24 @@ export function slugify(title: string): string {
   const suffix = randomBytes(3).toString("hex");
   return base ? `${base}-${suffix}` : suffix;
 }
+
+/**
+ * Developer API key. The `stm_live_` prefix makes a leaked key recognisable to
+ * secret scanners and to humans reading a log. Like stream keys it is random,
+ * so a plain SHA-256 (`hashStreamKey`) is the right way to store it.
+ */
+export const API_KEY_PREFIX = "stm_live_";
+
+export function generateApiKey(): string {
+  return `${API_KEY_PREFIX}${randomBytes(24).toString("base64url")}`;
+}
+
+/** Non-secret head of an API key, shown in the dashboard to tell keys apart. */
+export function apiKeyDisplayPrefix(apiKey: string): string {
+  return apiKey.slice(0, API_KEY_PREFIX.length + 6);
+}
+
+/** HMAC secret handed to a webhook receiver once, at creation. */
+export function generateWebhookSecret(): string {
+  return `whsec_${randomBytes(24).toString("base64url")}`;
+}

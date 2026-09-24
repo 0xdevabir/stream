@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import type { FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 
 import { env } from "../env";
 
@@ -69,4 +69,22 @@ export function clearAuthCookies(reply: FastifyReply): void {
 
 export function clearPlaybackCookie(reply: FastifyReply): void {
   reply.clearCookie(COOKIE.playback, { path: "/" });
+}
+
+/** Header an embedded player sends instead of the cookie (see below). */
+export const PLAYBACK_TOKEN_HEADER = "x-playback-token";
+
+/**
+ * The playback token, from the cookie or the X-Playback-Token header.
+ *
+ * Embeds need the header: a player in a customer's iframe is a third-party
+ * context, where Safari (and increasingly Chrome) drop our cookies. hls.js
+ * attaches the header to every playlist, segment and key request, and nginx
+ * forwards it to the authz subrequest. The header wins when both are present
+ * because it is the more specific credential.
+ */
+export function playbackTokenFrom(request: FastifyRequest): string | undefined {
+  const header = request.headers[PLAYBACK_TOKEN_HEADER];
+  if (typeof header === "string" && header.length > 0) return header;
+  return request.cookies[COOKIE.playback];
 }

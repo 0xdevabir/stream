@@ -239,21 +239,26 @@ export async function revealStreamKey(streamId: string): Promise<string> {
  * Called when media starts arriving. `startedAt` is written only on the first
  * transition, so a brief encoder reconnect mid-class does not reset the clock
  * the recording and analytics are measured against.
+ *
+ * Returns whether the stream actually went live (it was not already LIVE), so
+ * callers can tell a real transition from a repeated report.
  */
-export async function beginLive(streamId: string): Promise<void> {
+export async function beginLive(streamId: string): Promise<boolean> {
   const stream = await prisma.stream.findUnique({
     where: { id: streamId },
-    select: { startedAt: true },
+    select: { startedAt: true, status: true },
   });
+  if (!stream) throw ApiError.notFound("Unknown stream");
 
   await prisma.stream.update({
     where: { id: streamId },
     data: {
       status: "LIVE",
       endedAt: null,
-      ...(stream?.startedAt ? {} : { startedAt: new Date() }),
+      ...(stream.startedAt ? {} : { startedAt: new Date() }),
     },
   });
+  return stream.status !== "LIVE";
 }
 
 /** Media stopped; a recording may still be processing. */

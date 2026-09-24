@@ -27,3 +27,6 @@ pnpm-debug.log*
 *.ts.tmp
 *.m3u8.tmp
 *.key
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

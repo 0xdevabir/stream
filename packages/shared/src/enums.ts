@@ -64,3 +64,10 @@ export type LatencyMode = (typeof LATENCY_MODES)[number];
 
 export const INGEST_PROTOCOLS = ["WHIP", "RTMP", "SRT"] as const;
 export type IngestProtocol = (typeof INGEST_PROTOCOLS)[number];
+
+export const WEBHOOK_DELIVERY_STATUSES = [
+  "PENDING",
+  "SUCCEEDED",
+  "FAILED",
+] as const;
+export type WebhookDeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
